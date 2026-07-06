@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Compare — {{ equipment.name }} — IHC Logbook{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  .compare-col-today { color: var(--ihc-navy); font-weight: 700; }
+  .compare-col-sub { font-size: .72rem; color: #8898aa; font-weight: 400; display: block; }
+  .table thead th.col-today { background: rgba(12,31,69,.06) !important; border-bottom: 2px solid var(--ihc-gold) !important; color: var(--ihc-navy); }
+  .delta-pos { color: #dc2626; font-weight: 700; font-size: .85rem; }
+  .delta-neg { color: #059669; font-weight: 700; font-size: .85rem; }
+  .delta-zero { color: #94a3b8; font-size: .85rem; }
+  .trend-param-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ihc-navy); border-left: 2px solid var(--ihc-gold); padding-left: .5rem; margin-bottom: .5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center page-header">
+  <div>
+    <h4 class="mb-0">Historical Comparison — {{ equipment.name }}</h4>
+    <div class="page-subtitle"><i class="bi bi-graph-up me-1"></i>Reference date: {{ ref_date.strftime('%d %B %Y') }}</div>
+  </div>
+  <a href="{{ url_for('supervisor.log_detail', log_id=log.id) }}"
+     class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Log
+  </a>
+</div>
+
+<!-- Comparison table -->
+<div class="card mb-4">
+  <div class="card-header card-header-navy fw-semibold">
+    <i class="bi bi-table me-1"></i>Reading Comparison
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Parameter</th>
+            <th class="col-today">Today<span class="compare-col-sub">{{ ref_date.strftime('%d %b') }}</span></th>
+            <th>Yesterday<span class="compare-col-sub">{{ (ref_date - timedelta(days=1)).strftime('%d %b') if comparison.yesterday else '—' }}</span></th>
+            <th>Last Week<span class="compare-col-sub">{{ (ref_date - timedelta(days=7)).strftime('%d %b') if comparison.last_week else '—' }}</span></th>
+            <th>Last Month<span class="compare-col-sub">{{ (ref_date - timedelta(days=30)).strftime('%d %b') if comparison.last_month else '—' }}</span></th>
+            <th>Δ vs Yesterday</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pname in param_names %}
+          {% set today_val = comparison.today.readings.get(pname) if comparison.today else None %}
+          {% set yest_val  = comparison.yesterday.readings.get(pname) if comparison.yesterday else None %}
+          {% set week_val  = comparison.last_week.readings.get(pname) if comparison.last_week else None %}
+          {% set month_val = comparison.last_month.readings.get(pname) if comparison.last_month else None %}
+          <tr>
+            <td class="fw-semibold">{{ pname }}</td>
+            <td>{{ today_val or '—' }}</td>
+            <td>{{ yest_val or '—' }}</td>
+            <td>{{ week_val or '—' }}</td>
+            <td>{{ month_val or '—' }}</td>
+            <td>
+              {% if today_val and yest_val %}
+                {% set delta = today_val|float - yest_val|float %}
+                {% if delta > 0 %}
+                  <span class="delta-pos">+{{ "%.2f"|format(delta) }}</span>
+                {% elif delta < 0 %}
+                  <span class="delta-neg">{{ "%.2f"|format(delta) }}</span>
+                {% else %}
+                  <span class="delta-zero">No change</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          <!-- Status row -->
+          <tr class="table-light">
+            <td class="fw-semibold">Equipment Status</td>
+            <td>
+              {% if comparison.today %}
+                <span class="badge badge-{{ comparison.today.status|lower }}">{{ comparison.today.status }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if comparison.yesterday %}
+                <span class="badge badge-{{ comparison.yesterday.status|lower }}">{{ comparison.yesterday.status }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if comparison.last_week %}
+                <span class="badge badge-{{ comparison.last_week.status|lower }}">{{ comparison.last_week.status }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if comparison.last_month %}
+                <span class="badge badge-{{ comparison.last_month.status|lower }}">{{ comparison.last_month.status }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Trend charts -->
+{% if trend_data %}
+<div class="card">
+  <div class="card-header card-header-navy fw-semibold">
+    <i class="bi bi-graph-up me-1"></i>30-Day Trend
+  </div>
+  <div class="card-body">
+    <div class="row g-4">
+      {% for pname, points in trend_data.items() %}
+      {% if points %}
+      <div class="col-md-6">
+        <div class="trend-param-label">{{ pname }}</div>
+        <canvas id="chart_{{ loop.index }}" height="120"></canvas>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const trendData = {{ trend_data | tojson }};
+const paramNames = {{ param_names | tojson }};
+
+let chartIndex = 1;
+paramNames.forEach(pname => {
+  const points = trendData[pname];
+  if (!points || !points.length) { chartIndex++; return; }
+
+  const canvas = document.getElementById('chart_' + chartIndex);
+  if (!canvas) { chartIndex++; return; }
+
+  new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: points.map(p => p.x),
+      datasets: [{
+        label: pname,
+        data: points.map(p => p.y),
+        borderColor: '#0c1f45',
+        backgroundColor: 'rgba(201,168,76,0.10)',
+        tension: 0.35,
+        pointRadius: 3,
+        pointBackgroundColor: '#c9a84c',
+        pointBorderColor: '#0c1f45',
+        fill: true,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+        y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } }
+      }
+    }
+  });
+  chartIndex++;
+});
+</script>
+{% endblock %}

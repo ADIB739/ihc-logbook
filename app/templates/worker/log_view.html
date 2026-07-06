@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Log #{{ log.id }} — IHC Logbook{% endblock %}
+
+{% block extra_head %}
+<style>
+  .readings-section-block { border-left: 3px solid var(--ihc-gold); background: linear-gradient(to right, rgba(12,31,69,.03), transparent); padding: .5rem 1rem .25rem; margin-top: .25rem; }
+  .review-banner { display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1.25rem; font-size: .875rem; }
+  .review-banner.approved { background: rgba(5,150,105,.08); border: 1px solid rgba(5,150,105,.3); color: #065f46; }
+  .review-banner.attention { background: rgba(220,38,38,.07); border: 1px solid rgba(220,38,38,.25); color: #7f1d1d; }
+  .review-banner.pending { background: rgba(217,119,6,.07); border: 1px solid rgba(217,119,6,.25); color: #78350f; }
+  .review-banner i { font-size: 1.25rem; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center page-header">
+  <div>
+    <h4 class="mb-0">
+      Log Entry — {{ log.equipment.name }}
+      {% if log.is_edited %}
+      <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">Edited</span>
+      {% endif %}
+    </h4>
+    <div class="page-subtitle"><i class="bi bi-building me-1"></i>{{ log.equipment.department.name }} &bull; {{ log.log_date.strftime('%d %B %Y') }}</div>
+  </div>
+  <div class="d-flex gap-2">
+    {% if log.is_editable %}
+    <a href="{{ url_for('worker.log_edit', log_id=log.id) }}" class="btn btn-warning btn-sm">
+      <i class="bi bi-pencil-square me-1"></i>Edit Log
+    </a>
+    {% endif %}
+    <a href="{{ url_for('worker.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-5">
+    <div class="card mb-3">
+      <div class="card-header card-header-navy fw-semibold"><i class="bi bi-info-circle me-2"></i>Basic Information</div>
+      <div class="card-body">
+        <dl class="row mb-0 ihc-dl">
+          <dt class="col-sm-5">Date</dt>
+          <dd class="col-sm-7">{{ log.log_date.strftime('%d %B %Y') }}</dd>
+          <dt class="col-sm-5">Time</dt>
+          <dd class="col-sm-7">{{ log.log_time.strftime('%H:%M') }}</dd>
+          <dt class="col-sm-5">Department</dt>
+          <dd class="col-sm-7">{{ log.equipment.department.name }}</dd>
+          <dt class="col-sm-5">Equipment</dt>
+          <dd class="col-sm-7">{{ log.equipment.name }}</dd>
+          <dt class="col-sm-5">Worker</dt>
+          <dd class="col-sm-7">{{ log.worker.name }}</dd>
+          <dt class="col-sm-5">Status</dt>
+          <dd class="col-sm-7">
+            <span class="badge badge-{{ log.status|lower }}">{{ log.status }}</span>
+          </dd>
+          <dt class="col-sm-5">Submitted</dt>
+          <dd class="col-sm-7">{{ log.submitted_at|ist('%d %b %Y %H:%M') }}</dd>
+          {% if log.is_edited %}
+          <dt class="col-sm-5">Last Edited</dt>
+          <dd class="col-sm-7 text-warning fw-semibold">{{ log.edited_at|ist('%d %b %Y %H:%M:%S') }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header bg-white fw-semibold"><i class="bi bi-chat-quote me-2"></i>Remarks / Alarms</div>
+      <div class="card-body">
+        <p class="ihc-remark">"{{ log.worker_remark or 'No remark provided.' }}"</p>
+      </div>
+    </div>
+
+    {% if log.supervisor_remarks %}
+    <div class="card">
+      <div class="card-header card-header-navy fw-semibold"><i class="bi bi-person-check me-2"></i>Supervisor Remarks</div>
+      <div class="card-body">
+        {% for rem in log.supervisor_remarks %}
+        <div class="{% if not loop.last %}border-bottom pb-2 mb-2{% endif %}">
+          <div class="fw-semibold small">{{ rem.supervisor.name }}
+            <span class="text-muted fw-normal">— {{ rem.created_at|ist('%d %b %Y %H:%M') }}</span>
+          </div>
+          <p class="mb-1 fst-italic">"{{ rem.remark }}"</p>
+          {% if rem.review_status == 'Approved' %}
+            <span class="badge bg-success">Approved</span>
+          {% elif rem.review_status == 'NeedsAttention' %}
+            <span class="badge bg-danger">Needs Attention</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">Pending</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Readings grouped by section -->
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header card-header-navy fw-semibold"><i class="bi bi-speedometer2 me-2"></i>Equipment Readings</div>
+      <div class="card-body p-0">
+        {% if grouped_readings %}
+          {% for section, rows in grouped_readings %}
+          <div class="readings-section-block">
+            <span class="ihc-section-pill">{{ section }}</span>
+          </div>
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr><th>Parameter</th><th>Value</th><th>Unit</th></tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td class="small">{{ r.param_name }}</td>
+                <td class="fw-semibold small">{{ r.param_value or '—' }}</td>
+                <td class="text-muted small">{{ r.unit or '' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% endfor %}
+        {% else %}
+          <p class="text-center text-muted py-3">No readings recorded.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

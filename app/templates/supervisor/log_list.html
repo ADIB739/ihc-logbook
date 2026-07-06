@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}All Logs — IHC Logbook{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filter-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #8898aa; margin-bottom: .3rem; }
+  .results-meta { font-size: .8rem; color: #8898aa; }
+  .export-btn { background: rgba(201,168,76,.1); border: 1px solid rgba(201,168,76,.4); color: var(--ihc-navy); font-weight: 600; font-size: .8rem; border-radius: 8px; padding: .4rem .85rem; transition: background .15s; }
+  .export-btn:hover { background: rgba(201,168,76,.2); color: var(--ihc-navy); }
+  .export-btn i { color: var(--ihc-gold); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center page-header">
+  <div>
+    <h4 class="mb-0">All Logs</h4>
+    <div class="page-subtitle"><i class="bi bi-list-ul me-1"></i>Operational log records across all departments</div>
+  </div>
+  <a href="{{ export_url }}" class="export-btn">
+    <i class="bi bi-download me-1"></i>Export CSV
+  </a>
+</div>
+
+<!-- Filter card -->
+<div class="card mb-4">
+  <div class="card-header card-header-navy fw-semibold">
+    <i class="bi bi-funnel me-1"></i>Filters
+  </div>
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('supervisor.log_list') }}" class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label small">From Date</label>
+        <input type="date" class="form-control form-control-sm" name="date_from"
+               value="{{ filters.date_from }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">To Date</label>
+        <input type="date" class="form-control form-control-sm" name="date_to"
+               value="{{ filters.date_to }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Department</label>
+        <select class="form-select form-select-sm" name="dept_id" id="dept-filter">
+          <option value="">All</option>
+          {% for d in departments %}
+          <option value="{{ d.id }}" {% if filters.dept_id == d.id %}selected{% endif %}>
+            {{ d.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Equipment</label>
+        <select class="form-select form-select-sm" name="equipment_id" id="equip-filter">
+          <option value="">All</option>
+          {% for e in equipment_all %}
+          <option value="{{ e.id }}"
+                  data-dept="{{ e.dept_id }}"
+                  {% if filters.equipment_id == e.id %}selected{% endif %}>
+            {{ e.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Worker</label>
+        <select class="form-select form-select-sm" name="worker_id">
+          <option value="">All</option>
+          {% for w in workers %}
+          <option value="{{ w.id }}" {% if filters.worker_id == w.id %}selected{% endif %}>
+            {{ w.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Equip. Status</label>
+        <select class="form-select form-select-sm" name="status">
+          <option value="">All</option>
+          {% for s in ['Running','Standby','Shutdown','Fault'] %}
+          <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Review Status</label>
+        <select class="form-select form-select-sm" name="review_status">
+          <option value="">All</option>
+          {% for rs, label in [('Pending','Pending'),('Approved','Approved'),('NeedsAttention','Needs Attention')] %}
+          <option value="{{ rs }}" {% if filters.review_status == rs %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search me-1"></i>Filter
+        </button>
+        <a href="{{ url_for('supervisor.log_list') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="card">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="fw-semibold"><i class="bi bi-table me-1"></i>Results</span>
+    <span class="badge" style="background:var(--ihc-navy);font-size:.75rem;">{{ total }} log(s)</span>
+  </div>
+  <div class="card-body p-0">
+    {% if logs %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Date / Time</th>
+            <th>Equipment</th>
+            <th>Department</th>
+            <th>Worker</th>
+            <th>Status</th>
+            <th>Review</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td class="text-muted small">{{ log.id }}</td>
+            <td class="small">{{ log.log_date.strftime('%d %b %Y') }}<br>
+              <span class="text-muted">{{ log.log_time.strftime('%H:%M') }}</span></td>
+            <td class="fw-semibold small">{{ log.equipment.name }}</td>
+            <td class="small">{{ log.equipment.department.name }}</td>
+            <td class="small">{{ log.worker.name }}</td>
+            <td>
+              <span class="badge badge-{{ log.status|lower }}">{{ log.status }}</span>
+            </td>
+            <td>
+              {% set rs = log.review_status %}
+              {% if rs == 'Approved' %}
+                <span class="review-approved small"><i class="bi bi-check-circle-fill me-1"></i>Approved</span>
+              {% elif rs == 'NeedsAttention' %}
+                <span class="review-needsattention small"><i class="bi bi-exclamation-triangle-fill me-1"></i>Attention</span>
+              {% else %}
+                <span class="review-pending small"><i class="bi bi-hourglass-split me-1"></i>Pending</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ url_for('supervisor.log_detail', log_id=log.id) }}"
+                 class="btn btn-sm btn-outline-primary me-1">Review</a>
+              <a href="{{ url_for('supervisor.log_compare', log_id=log.id) }}"
+                 class="btn btn-sm btn-outline-secondary">Compare</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-search" style="font-size:2rem;"></i>
+      <p class="mt-2">No logs found matching the filters.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if total_pages > 1 %}
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+    <span class="text-muted small">
+      Showing {{ (page - 1) * 25 + 1 }}–{{ [page * 25, total] | min }} of {{ total }}
+    </span>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if page == 1 %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('supervisor.log_list', page=page-1, **filters) }}">
+            &laquo; Prev
+          </a>
+        </li>
+        {% for p in range(1, total_pages + 1) %}
+          {% if p == page %}
+            <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+          {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+            <li class="page-item">
+              <a class="page-link" href="{{ url_for('supervisor.log_list', page=p, **filters) }}">{{ p }}</a>
+            </li>
+          {% elif p == page - 3 or p == page + 3 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('supervisor.log_list', page=page+1, **filters) }}">
+            Next &raquo;
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const deptSel  = document.getElementById('dept-filter');
+  const equipSel = document.getElementById('equip-filter');
+
+  function filterEquip() {
+    const deptId = deptSel.value;
+    Array.from(equipSel.options).forEach(opt => {
+      if (opt.value === '') return;               // always keep "All" option
+      const match = !deptId || opt.dataset.dept === deptId;
+      opt.hidden   = !match;
+      opt.disabled = !match;
+      if (!match && opt.selected) equipSel.value = '';
+    });
+  }
+
+  deptSel.addEventListener('change', filterEquip);
+  filterEquip();   // run on page load in case dept is already pre-selected
+})();
+</script>
+{% endblock %}

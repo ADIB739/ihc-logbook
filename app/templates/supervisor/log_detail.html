@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Log #{{ log.id }} — IHC Logbook{% endblock %}
+
+{% block extra_head %}
+<style>
+  .review-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: .8rem; font-weight: 600; cursor: pointer; border: 2px solid; transition: all .15s; }
+  .review-chip-approved { border-color: #059669; color: #059669; }
+  .review-chip-approved:has(input:checked), .review-chip-approved.selected { background: rgba(5,150,105,.1); }
+  .review-chip-attention { border-color: #dc2626; color: #dc2626; }
+  .review-chip-attention:has(input:checked), .review-chip-attention.selected { background: rgba(220,38,38,.08); }
+  .review-chip-pending { border-color: #d97706; color: #d97706; }
+  .review-chip-pending:has(input:checked), .review-chip-pending.selected { background: rgba(217,119,6,.08); }
+  .review-chip input[type="radio"] { display: none; }
+  .remark-history-item { position: relative; padding-left: 1.25rem; }
+  .remark-history-item::before { content: ''; position: absolute; left: 0; top: .3rem; width: 8px; height: 8px; border-radius: 50%; background: var(--ihc-navy); border: 2px solid #fff; outline: 1px solid var(--ihc-navy); }
+  .remark-history-item:not(:last-child)::after { content: ''; position: absolute; left: 3.5px; top: 1rem; bottom: -0.25rem; width: 1px; background: #e2e8f4; }
+  .readings-section-block { border-left: 3px solid var(--ihc-gold); background: linear-gradient(to right, rgba(12,31,69,.03), transparent); padding: .5rem 1rem .25rem; margin-top: .25rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center page-header">
+  <div>
+    <h4 class="mb-0">Log #{{ log.id }} — {{ log.equipment.name }}</h4>
+    <div class="page-subtitle">
+      <i class="bi bi-calendar3 me-1"></i>{{ log.log_date.strftime('%d %B %Y') }} at {{ log.log_time.strftime('%H:%M') }}
+      &nbsp;&bull;&nbsp;<i class="bi bi-person me-1"></i>{{ log.worker.name }}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('supervisor.log_compare', log_id=log.id) }}"
+       class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-graph-up me-1"></i>Compare History
+    </a>
+    <a href="{{ url_for('supervisor.log_list') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+{% if log.needs_re_review %}
+<div class="alert alert-warning d-flex align-items-center mb-4">
+  <i class="bi bi-arrow-repeat fs-4 me-3"></i>
+  <div>
+    <strong>Worker updated this log after your review.</strong><br>
+    <span class="small">Edited at {{ log.edited_at|ist('%d %b %Y %H:%M:%S') }} — please review the updated readings and save a new remark.</span>
+  </div>
+</div>
+{% elif log.is_edited %}
+<div class="alert alert-secondary d-flex align-items-center mb-4">
+  <i class="bi bi-pencil-square me-2"></i>
+  <span class="small">This log was edited by the worker at {{ log.edited_at|ist('%d %b %Y %H:%M:%S') }}.</span>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <!-- Left: info + readings -->
+  <div class="col-md-7">
+    <div class="card mb-3">
+      <div class="card-header card-header-navy fw-semibold"><i class="bi bi-info-circle me-2"></i>Basic Information</div>
+      <div class="card-body">
+        <dl class="row mb-0 small ihc-dl">
+          <dt class="col-sm-4">Date / Time</dt>
+          <dd class="col-sm-8">{{ log.log_date.strftime('%d %B %Y') }} at {{ log.log_time.strftime('%H:%M') }}</dd>
+          <dt class="col-sm-4">Department</dt>
+          <dd class="col-sm-8">{{ log.equipment.department.name }}</dd>
+          <dt class="col-sm-4">Equipment</dt>
+          <dd class="col-sm-8">{{ log.equipment.name }}</dd>
+          <dt class="col-sm-4">Worker</dt>
+          <dd class="col-sm-8">{{ log.worker.name }}</dd>
+          <dt class="col-sm-4">Equip. Status</dt>
+          <dd class="col-sm-8">
+            <span class="badge badge-{{ log.status|lower }}">{{ log.status }}</span>
+          </dd>
+          <dt class="col-sm-4">Submitted</dt>
+          <dd class="col-sm-8">{{ log.submitted_at|ist('%d %b %Y %H:%M') }}</dd>
+          {% if log.is_edited %}
+          <dt class="col-sm-4">Last Edited</dt>
+          <dd class="col-sm-8 text-warning fw-semibold">{{ log.edited_at|ist('%d %b %Y %H:%M:%S') }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header card-header-navy fw-semibold"><i class="bi bi-speedometer2 me-2"></i>Equipment Readings</div>
+      <div class="card-body p-0">
+        {% if grouped_readings %}
+          {% for section, rows in grouped_readings %}
+          <div class="readings-section-block">
+            <span class="ihc-section-pill">{{ section }}</span>
+          </div>
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr><th>Parameter</th><th>Value</th><th>Unit</th></tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td class="small">{{ r.param_name }}</td>
+                <td class="fw-semibold small">{{ r.param_value or '—' }}</td>
+                <td class="text-muted small">{{ r.unit or '' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% endfor %}
+        {% else %}
+          <p class="text-center text-muted py-3">No readings recorded.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header bg-white fw-semibold"><i class="bi bi-chat-quote me-2"></i>Worker Remark</div>
+      <div class="card-body">
+        <p class="ihc-remark">"{{ log.worker_remark or 'No remark provided.' }}"</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: supervisor remark form + history -->
+  <div class="col-md-5">
+    <div class="card mb-3">
+      <div class="card-header card-header-navy fw-semibold"><i class="bi bi-pencil-square me-2"></i>Add / Update Supervisor Remark</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('supervisor.log_detail', log_id=log.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Remark <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="remark" rows="4" required
+                      placeholder="Enter your observations…">{{ existing_remark.remark if existing_remark else '' }}</textarea>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold d-block mb-2">Review Status</label>
+            <div class="d-flex flex-wrap gap-2">
+              {% for val, label, cls in [('Approved','Approved','approved'),('NeedsAttention','Needs Attention','attention'),('Pending','Pending','pending')] %}
+              <label class="review-chip review-chip-{{ cls }}">
+                <input type="radio" name="review_status" value="{{ val }}"
+                  {% if existing_remark and existing_remark.review_status == val %}checked
+                  {% elif not existing_remark and val == 'Pending' %}checked{% endif %}>
+                {% if val == 'Approved' %}<i class="bi bi-check-circle-fill"></i>
+                {% elif val == 'NeedsAttention' %}<i class="bi bi-exclamation-triangle-fill"></i>
+                {% else %}<i class="bi bi-hourglass-split"></i>{% endif %}
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-save me-1"></i>Save Remark
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {% if log.supervisor_remarks %}
+    <div class="card">
+      <div class="card-header bg-white fw-semibold"><i class="bi bi-clock-history me-2"></i>Remark History</div>
+      <div class="card-body">
+        {% for rem in log.supervisor_remarks|sort(attribute='created_at', reverse=True) %}
+        <div class="remark-history-item {% if not loop.last %}mb-3{% endif %}">
+          <div class="fw-semibold small">{{ rem.supervisor.name }}
+            <span class="fw-normal text-muted">— {{ rem.created_at|ist('%d %b %H:%M') }}</span>
+          </div>
+          <p class="small mb-1 ihc-remark mt-1">"{{ rem.remark }}"</p>
+          {% if rem.review_status == 'Approved' %}
+            <span class="badge bg-success mt-1">Approved</span>
+          {% elif rem.review_status == 'NeedsAttention' %}
+            <span class="badge bg-danger mt-1">Needs Attention</span>
+          {% else %}
+            <span class="badge bg-warning text-dark mt-1">Pending</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

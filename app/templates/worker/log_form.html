@@ -1,0 +1,619 @@
+{% extends "base.html" %}
+{% block title %}{% if edit_mode %}Edit Log #{{ log.id }}{% else %}Submit Log{% endif %} — IHC Logbook{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Page background — slightly cooler than app default ── */
+  body { background: #e6eaf4 !important; }
+
+  /* ── Page title strip ────────────────────────────────── */
+  .lf-page-header {
+    padding-left: 1rem;
+    border-left: 3px solid var(--ihc-gold);
+    margin-bottom: 1.5rem;
+  }
+  .lf-page-header h4  { color: #0c1f45; font-size: 1.2rem; margin-bottom: .1rem; }
+  .lf-page-header .text-muted { color: #6b7a99 !important; }
+
+  /* ── Card shell ──────────────────────────────────────── */
+  .lf-card {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow:
+      0 2px 8px rgba(12,31,69,.06),
+      0 10px 40px rgba(12,31,69,.12),
+      0 0 0 1px rgba(12,31,69,.05);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     HEADER ZONE — navy, glassmorphism controls
+     ═══════════════════════════════════════════════════════ */
+  .lf-header {
+    background: linear-gradient(145deg, #0b1d42 0%, #1a3268 100%);
+    padding: 1.5rem 1.75rem 1.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Blueprint grid behind header fields */
+  .lf-header::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(201,168,76,.065) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,.065) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+  }
+  .lf-header > * { position: relative; z-index: 1; }
+
+  .lf-header .form-label {
+    color: rgba(255,255,255,.58);
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-bottom: .38rem;
+  }
+  /* Required star → gold in header context */
+  .lf-header .text-danger { color: var(--ihc-gold) !important; }
+
+  /* Glassmorphism inputs */
+  .lf-header .form-control,
+  .lf-header .form-select {
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 9px;
+    color: #fff;
+    font-size: .875rem;
+    padding: .56rem .9rem;
+    transition: background .15s, border-color .15s, box-shadow .15s;
+  }
+  .lf-header .form-control::placeholder { color: rgba(255,255,255,.32); }
+  .lf-header .form-control:focus,
+  .lf-header .form-select:focus {
+    background: rgba(255,255,255,.18);
+    border-color: var(--ihc-gold);
+    box-shadow: 0 0 0 3px rgba(201,168,76,.22);
+    color: #fff;
+    outline: none;
+  }
+  /* Native date/time picker icon → white */
+  .lf-header input[type="date"]::-webkit-calendar-picker-indicator,
+  .lf-header input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(.55);
+    cursor: pointer;
+  }
+  /* Select options need dark bg when browser renders the list */
+  .lf-header .form-select option { background: #162d5e; color: #fff; }
+  /* Read-only / disabled fields in edit mode */
+  .lf-header .form-control[readonly],
+  .lf-header .form-control:disabled {
+    background: rgba(255,255,255,.06);
+    color: rgba(255,255,255,.5);
+    border-color: rgba(255,255,255,.1);
+  }
+
+  /* Alerts inside header */
+  .lf-header .alert {
+    border-radius: 9px;
+    font-size: .83rem;
+    border: none;
+    margin-bottom: 1.25rem;
+  }
+  .lf-header .alert-info {
+    background: rgba(56,189,248,.12);
+    border: 1px solid rgba(56,189,248,.22) !important;
+    color: rgba(255,255,255,.82);
+  }
+  .lf-header .alert-warning {
+    background: rgba(245,158,11,.14);
+    border: 1px solid rgba(245,158,11,.3) !important;
+    color: #fef3c7;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     BODY ZONE — white, instrument-style parameter grid
+     ═══════════════════════════════════════════════════════ */
+  .lf-body {
+    background: #fff;
+    padding: 1.5rem 1.75rem;
+  }
+
+  /* Section headers — uses existing .section-header from base.html */
+  .lf-body .section-header { margin-bottom: .85rem; }
+  .lf-body .section-header.mt-3 { margin-top: 1.5rem !important; }
+
+  /* Phase group sub-labels (Secondary Pump / R Y B) */
+  .lf-body .badge.bg-secondary {
+    background: rgba(12,31,69,.09) !important;
+    color: #1a2744 !important;
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    padding: 3px 9px;
+    border-radius: 5px;
+  }
+  .lf-body .flex-grow-1[style*="border-top"] {
+    border-top-color: #e8ecf4 !important;
+  }
+
+  /* Numeric input — monospace, instrument feel */
+  .lf-body .input-group-sm .form-control {
+    border-color: #d8dff0;
+    background: #f7f9fc;
+    font-family: 'Courier New', monospace;
+    font-size: .84rem;
+    color: #0c1f45;
+    transition: background .13s, border-color .13s;
+  }
+  .lf-body .input-group-sm .form-control:focus {
+    background: #fff;
+    border-color: var(--ihc-navy);
+    box-shadow: 0 0 0 2px rgba(12,31,69,.1);
+  }
+  .lf-body .input-group-sm .form-control::placeholder {
+    color: #b8c2d8;
+    font-family: 'Inter', sans-serif;
+    font-size: .78rem;
+  }
+  /* Unit badge — navy bg, gold text */
+  .lf-body .input-group-text {
+    background: var(--ihc-navy);
+    color: var(--ihc-gold);
+    border-color: var(--ihc-navy);
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    min-width: 36px;
+    justify-content: center;
+    padding-left: .45rem;
+    padding-right: .45rem;
+  }
+
+  /* Empty state (no equipment chosen yet) */
+  .lf-empty-state {
+    text-align: center;
+    padding: 2.75rem 1rem;
+    color: rgba(12,31,69,.32);
+  }
+  .lf-empty-state i {
+    color: var(--ihc-gold);
+    opacity: .45;
+    display: block;
+    margin-bottom: .6rem;
+  }
+  .lf-empty-state p { font-size: .92rem; margin-bottom: .3rem; }
+  .lf-empty-hint { font-size: .77rem; color: rgba(12,31,69,.25); }
+
+  /* ═══════════════════════════════════════════════════════
+     FOOTER ZONE — light tint, status + remarks + submit
+     ═══════════════════════════════════════════════════════ */
+  .lf-footer {
+    background: #f2f5fb;
+    border-top: 1px solid #e2e8f4;
+    padding: 1.5rem 1.75rem 1.75rem;
+  }
+  .lf-footer .form-label {
+    font-size: .72rem;
+    font-weight: 700;
+    color: #374560;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: .38rem;
+  }
+  .lf-footer .form-select,
+  .lf-footer .form-control {
+    border-color: #d1d9e6;
+    background: #fff;
+    border-radius: 9px;
+    font-size: .875rem;
+  }
+  .lf-footer .form-select:focus,
+  .lf-footer .form-control:focus {
+    border-color: var(--ihc-navy);
+    box-shadow: 0 0 0 3px rgba(12,31,69,.1);
+  }
+  .lf-footer textarea.form-control {
+    resize: vertical;
+    min-height: 82px;
+  }
+
+  /* Submit button */
+  .lf-footer .btn-primary {
+    background: linear-gradient(135deg, #0c1f45, #1e3d72);
+    border: none;
+    padding: .62rem 1.8rem;
+    font-size: .9rem;
+    font-weight: 700;
+    letter-spacing: .25px;
+    border-radius: 9px;
+    transition: transform .14s, box-shadow .14s;
+  }
+  .lf-footer .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 22px rgba(12,31,69,.28);
+  }
+  .lf-footer .btn-primary:active { transform: none; }
+  .lf-footer .btn-outline-secondary {
+    border-radius: 9px;
+    font-size: .875rem;
+  }
+
+  /* ── Reduced motion ──────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .lf-footer .btn-primary,
+    .lf-body .input-group-sm .form-control,
+    .lf-header .form-control,
+    .lf-header .form-select { transition: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page title -->
+<div class="d-flex justify-content-between align-items-center lf-page-header">
+  <div>
+    <h4 class="fw-bold mb-0">
+      {% if edit_mode %}Edit Log Entry #{{ log.id }}{% else %}Submit New Log Entry{% endif %}
+    </h4>
+    <p class="text-muted small mb-0">
+      <i class="bi bi-building me-1"></i>{{ worker_dept.name }} Department
+    </p>
+  </div>
+  <a href="{{ url_for('worker.log_view', log_id=log.id) if edit_mode else url_for('worker.dashboard') }}"
+     class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="card lf-card">
+  <div class="card-body p-0">
+    <form method="POST"
+          action="{{ url_for('worker.log_edit', log_id=log.id) if edit_mode else url_for('worker.log_submit') }}"
+          id="log-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <!-- ═══ HEADER ZONE: alerts + date/time/equipment selection ═══ -->
+      <div class="lf-header">
+
+        {% if edit_mode %}
+        <div class="alert alert-warning py-2 mb-3 small d-flex justify-content-between align-items-center">
+          <span>
+            <i class="bi bi-pencil-square me-1"></i>
+            <strong>Edit window closes at {{ edit_deadline_display.strftime('%H:%M:%S') }}.</strong>
+            After that this log is locked.
+          </span>
+          <span id="edit-countdown" class="fw-bold ms-3"></span>
+        </div>
+        {% else %}
+        <div class="alert alert-info py-2 small">
+          <i class="bi bi-clock me-1"></i>
+          <strong>Hourly log:</strong> Submit one reading per hour. Time defaults to the start of the current hour.
+        </div>
+        {% endif %}
+
+        <!-- Row 1: Date / Time / Department -->
+        <div class="row g-3 mb-3 align-items-end">
+          <div class="col-6 col-md-4">
+            <label class="form-label fw-semibold">Date</label>
+            <input type="date" class="form-control" name="log_date" value="{{ today }}"
+                   {% if edit_mode %}readonly{% else %}required{% endif %}>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label fw-semibold">Time</label>
+            <input type="time" class="form-control" name="log_time" value="{{ now_time }}"
+                   {% if edit_mode %}readonly{% else %}required{% endif %}>
+          </div>
+          {% if edit_mode %}
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Equipment</label>
+            <input type="hidden" name="equipment_id" value="{{ selected_equip }}">
+            <input type="text" class="form-control" value="{{ log.equipment.name }}" disabled>
+          </div>
+          {% else %}
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Department <span class="text-danger">*</span></label>
+            <select class="form-select" id="dept-select">
+              <option value="">Select department</option>
+            </select>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if not edit_mode %}
+        <!-- Row 2: Unit Type + Unit -->
+        <div class="row g-3 mb-0 align-items-end" id="equip-row" style="display:none;">
+          <div class="col-md-6" id="type-col">
+            <label class="form-label fw-semibold">Unit Type <span class="text-danger">*</span></label>
+            <select class="form-select" id="type-select"></select>
+          </div>
+          <div class="col-md-6" id="unit-col" style="display:none;">
+            <label class="form-label fw-semibold">Unit <span class="text-danger">*</span></label>
+            <select class="form-select" id="unit-select" name="equipment_id" required></select>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>{# /.lf-header #}
+
+      <!-- ═══ BODY ZONE: parameter readings grid ═══ -->
+      <div class="lf-body">
+        {% if params %}
+          {# Sections where params come in pump/fan groups of 3 phases (R, Y, B) #}
+          {% set pump_sections = ['Secondary Pump', 'Primary Pump', 'Condenser Pump', 'C.T Fan'] %}
+          {% set ns = namespace(current_section=None, current_pump=None, current_subsection='__unset__', row_open=False) %}
+          {% for p in params %}
+
+            {# ── Section change ── #}
+            {% if p.section != ns.current_section %}
+              {% if ns.row_open %}</div>{% set ns.row_open = False %}{% endif %}
+              {% set ns.current_section = p.section %}
+              {% set ns.current_pump = None %}
+              {% set ns.current_subsection = '__unset__' %}
+              <div class="section-header {% if not loop.first %}mt-3{% endif %}">
+                <i class="bi bi-cpu me-1"></i>{{ p.section }}
+              </div>
+            {% endif %}
+
+            {% if ns.current_section in pump_sections %}
+              {# ── Pump/fan section: group R/Y/B phases under a sub-header per pump ── #}
+              {% set pump_label = p.param_name | replace(' R Phase','') | replace(' Y Phase','') | replace(' B Phase','') %}
+              {% if pump_label != ns.current_pump %}
+                {% if ns.row_open %}</div>{% set ns.row_open = False %}{% endif %}
+                {% set ns.current_pump = pump_label %}
+                <div class="d-flex align-items-center mb-2 {% if not loop.first %}mt-3{% endif %}">
+                  <span class="badge bg-secondary me-2">{{ pump_label }}</span>
+                  <div class="flex-grow-1" style="border-top:1px solid #dee2e6;"></div>
+                </div>
+                <div class="row g-3 mb-1">
+                {% set ns.row_open = True %}
+              {% endif %}
+              {% set phase_label = p.param_name | replace(pump_label + ' ', '') %}
+              <div class="col-4">
+                <label class="form-label small">{{ phase_label }}
+                  {% if p.unit %}<span class="text-muted">({{ p.unit }})</span>{% endif %}
+                </label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.01" class="form-control"
+                         name="param_{{ p.param_name }}"
+                         value="{{ readings_map.get(p.param_name, '') if readings_map else '' }}"
+                         placeholder="—">
+                  {% if p.unit %}<span class="input-group-text">{{ p.unit }}</span>{% endif %}
+                </div>
+              </div>
+
+            {% else %}
+              {# ── Non-pump section: optional subsection sub-headers ── #}
+              {% set p_sub = p.subsection or '' %}
+              {% if p_sub != ns.current_subsection %}
+                {% if ns.row_open %}</div>{% set ns.row_open = False %}{% endif %}
+                {% set ns.current_subsection = p_sub %}
+                {% if p_sub %}
+                  <div class="d-flex align-items-center mb-2 mt-3">
+                    <span class="badge bg-secondary me-2">{{ p_sub }}</span>
+                    <div class="flex-grow-1" style="border-top:1px solid #dee2e6;"></div>
+                  </div>
+                {% endif %}
+              {% endif %}
+
+              {% if not ns.row_open %}
+                <div class="row g-3 mb-2">
+                {% set ns.row_open = True %}
+              {% endif %}
+
+              {# Subsection items: 3 per row (col-4); regular items: 4 per row (col-md-4 col-lg-3) #}
+              {% if p_sub %}
+              <div class="col-4">
+              {% else %}
+              <div class="col-md-4 col-lg-3">
+              {% endif %}
+                <label class="form-label small">{{ p.param_name }}
+                  {% if p.unit %}<span class="text-muted">({{ p.unit }})</span>{% endif %}
+                </label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.01" class="form-control"
+                         name="param_{{ p.param_name }}"
+                         value="{{ readings_map.get(p.param_name, '') if readings_map else '' }}"
+                         placeholder="—">
+                  {% if p.unit %}<span class="input-group-text">{{ p.unit }}</span>{% endif %}
+                </div>
+              </div>
+            {% endif %}
+
+          {% endfor %}
+          {% if ns.row_open %}</div>{% endif %}
+
+        {% else %}
+          <div class="lf-empty-state">
+            <i class="bi bi-sliders2" style="font-size:2.2rem;"></i>
+            <p>Select an equipment to load its readings.</p>
+            <div class="lf-empty-hint">Choose a department and unit type above to continue</div>
+          </div>
+        {% endif %}
+      </div>{# /.lf-body #}
+
+      <!-- ═══ FOOTER ZONE: status, remarks, submit ═══ -->
+      <div class="lf-footer">
+        <div class="row g-3 mb-4">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Equipment Status <span class="text-danger">*</span></label>
+            <select class="form-select" name="status" required>
+              <option value="">Select status</option>
+              {% for s in ['Running','Standby','Shutdown','Fault'] %}
+              <option value="{{ s }}" {% if edit_mode and log.status == s %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Remarks / Alarms</label>
+            <textarea class="form-control" name="worker_remark" rows="3"
+                      placeholder="e.g. Equipment running normally. Any alarms observed.">{{ log.worker_remark or '' if edit_mode else '' }}</textarea>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary px-4" id="submit-btn">
+            {% if edit_mode %}
+            <i class="bi bi-save me-1"></i>Save Changes
+            {% else %}
+            <i class="bi bi-send me-1"></i>Submit Log
+            {% endif %}
+          </button>
+          <a href="{{ url_for('worker.log_view', log_id=log.id) if edit_mode else url_for('worker.dashboard') }}"
+             class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </div>{# /.lf-footer #}
+
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if not edit_mode %}
+<script>
+const deptData        = {{ departments_json | safe }};
+const selectedEquipId = {{ selected_equip or 'null' }};
+const defaultDeptId   = {{ worker_dept.id if worker_dept else 'null' }};
+
+const deptSelect = document.getElementById('dept-select');
+const equipRow   = document.getElementById('equip-row');
+const typeSelect = document.getElementById('type-select');
+const unitCol    = document.getElementById('unit-col');
+const unitSelect = document.getElementById('unit-select');
+
+const TYPE_LABELS = { 'Chiller': 'Chillers' };
+function typeLabel(p) { return TYPE_LABELS[p] || p; }
+
+function getTypes(dept) {
+  const t = {};
+  dept.equipment.forEach(e => {
+    const prefix = e.name.replace(/-\d+$/, '').trim();
+    if (!t[prefix]) t[prefix] = [];
+    t[prefix].push(e);
+  });
+  return t;
+}
+
+function goToEquip(id) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('equipment_id', id);
+  window.location.href = url.toString();
+}
+
+// Rebuild types dropdown for a dept, returns types map
+function applyDept(deptId) {
+  const dept = deptData.find(d => d.id == deptId);
+  if (!dept) { equipRow.style.display = 'none'; return null; }
+  const types = getTypes(dept);
+  typeSelect.innerHTML = '<option value="">-- Select unit type --</option>';
+  Object.keys(types).sort().forEach(p => typeSelect.add(new Option(typeLabel(p), p)));
+  unitCol.style.display = 'none';
+  unitSelect.innerHTML  = '';
+  equipRow.style.display = '';
+  return types;
+}
+
+// Rebuild units dropdown for a type prefix, returns units array
+function applyType(types, prefix) {
+  const units = types[prefix] || [];
+  unitSelect.innerHTML = '<option value="">-- Select unit --</option>';
+  units.forEach(e => unitSelect.add(new Option(e.name, e.id)));
+  return units;
+}
+
+// ── Populate department dropdown ──────────────────────────
+deptData.forEach(d => deptSelect.add(new Option(d.name, d.id)));
+
+// ── Event listeners ───────────────────────────────────────
+deptSelect.addEventListener('change', function () {
+  applyDept(this.value);
+  // Always show unit-type dropdown — user picks the type, then form loads
+});
+
+typeSelect.addEventListener('change', function () {
+  const dept = deptData.find(d => d.id == deptSelect.value);
+  if (!dept || !this.value) return;
+  const units = applyType(getTypes(dept), this.value);
+  if (units.length === 1) {
+    goToEquip(units[0].id);          // single unit → load immediately
+  } else if (units.length > 1) {
+    unitCol.style.display = '';       // multiple → show picker, wait for user
+  }
+});
+
+unitSelect.addEventListener('change', function () {
+  if (this.value) goToEquip(this.value);
+});
+
+// ── Initialise on page load ───────────────────────────────
+function initUI() {
+  if (selectedEquipId) {
+    // Params already loaded — restore all three dropdown levels from URL
+    for (const dept of deptData) {
+      const eq = dept.equipment.find(e => e.id === selectedEquipId);
+      if (eq) {
+        deptSelect.value = dept.id;
+        const types = applyDept(dept.id);
+        const prefix = eq.name.replace(/-\d+$/, '').trim();
+        typeSelect.value = prefix;
+        const units = applyType(types, prefix);
+        unitSelect.value = selectedEquipId;   // always set so required validation passes
+        if (units.length > 1) {
+          unitCol.style.display = '';
+        }
+        break;
+      }
+    }
+    return;
+  }
+
+  // Pre-select worker's own department if nothing is cached yet
+  if (!deptSelect.value && defaultDeptId) {
+    deptSelect.value = defaultDeptId;
+  }
+
+  // Populate type dropdown for whichever dept is selected (cached or default)
+  if (deptSelect.value) {
+    const savedType = typeSelect.value;   // browser may have cached a type
+    const types = applyDept(deptSelect.value);
+    // Restore cached type selection (applyDept reset it to placeholder "")
+    if (types && savedType && types[savedType]) {
+      typeSelect.value = savedType;
+      const units = applyType(types, savedType);
+      if (units.length > 1) unitCol.style.display = '';
+    }
+  }
+}
+
+// Run after browser finishes any form-value restoration (load fires after it)
+window.addEventListener('load', initUI);
+// Also run when the page is restored from bfcache (back-navigation)
+window.addEventListener('pageshow', function (e) { if (e.persisted) initUI(); });
+</script>
+{% else %}
+<script>
+// Countdown uses server-computed seconds remaining — no timezone issues
+let remaining = {{ seconds_remaining }};
+const countdownEl = document.getElementById('edit-countdown');
+const submitBtn = document.getElementById('submit-btn');
+
+function tick() {
+  if (remaining <= 0) {
+    countdownEl.textContent = 'Window closed';
+    countdownEl.className = 'fw-bold ms-3 text-danger';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Window closed';
+    return;
+  }
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  countdownEl.textContent = m + ':' + String(s).padStart(2, '0') + ' left';
+  remaining--;
+}
+tick();
+setInterval(tick, 1000);
+</script>
+{% endif %}
+{% endblock %}

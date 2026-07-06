@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — IHC Logbook{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Coverage hour pill refinement ─────────────────────── */
+  .cov-block { padding: .5rem 0; }
+  .cov-block:not(:last-child) { border-bottom: 1px solid #eef1f7; }
+  .cov-equip {
+    font-size: .8rem; font-weight: 600; color: var(--ihc-navy);
+    display: flex; align-items: center; gap: .4rem;
+  }
+  .cov-equip i { color: var(--ihc-gold); }
+  .hour-pill {
+    font-family: 'Courier New', monospace;
+    font-size: .72rem; font-weight: 700;
+    background: rgba(5,150,105,.12);
+    color: #047857;
+    border: 1px solid rgba(5,150,105,.28);
+    border-radius: 6px;
+    padding: 3px 8px;
+    letter-spacing: .02em;
+  }
+  .cov-count {
+    font-size: .68rem; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: #94a3b8;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Derive review-status tallies from recent submissions ── #}
+{% set stats = namespace(approved=0, pending=0, attention=0) %}
+{% for log in recent_logs %}
+  {% if log.review_status == 'Approved' %}{% set stats.approved = stats.approved + 1 %}
+  {% elif log.review_status == 'NeedsAttention' %}{% set stats.attention = stats.attention + 1 %}
+  {% else %}{% set stats.pending = stats.pending + 1 %}{% endif %}
+{% endfor %}
+
+<div class="d-flex justify-content-between align-items-center page-header">
+  <div>
+    <h4>My Dashboard</h4>
+    <div class="page-subtitle"><i class="bi bi-person-circle me-1"></i>Welcome, {{ current_user.name }}</div>
+  </div>
+  <a href="{{ url_for('worker.log_new') }}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-1"></i>Submit Hourly Log
+  </a>
+</div>
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card stat-card blue p-3">
+      <div class="stat-label"><i class="bi bi-journal-check me-1"></i>Submitted Today</div>
+      <div class="stat-value text-primary">{{ today_count }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card green p-3">
+      <div class="stat-label"><i class="bi bi-check-circle me-1"></i>Approved</div>
+      <div class="stat-value" style="color:#059669;">{{ stats.approved }}</div>
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:.1rem;">of recent {{ recent_logs|length }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card yellow p-3">
+      <div class="stat-label"><i class="bi bi-hourglass-split me-1"></i>Awaiting Review</div>
+      <div class="stat-value" style="color:#d97706;">{{ stats.pending }}</div>
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:.1rem;">of recent {{ recent_logs|length }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card red p-3">
+      <div class="stat-label"><i class="bi bi-exclamation-triangle me-1"></i>Needs Attention</div>
+      <div class="stat-value" style="color:#dc2626;">{{ stats.attention }}</div>
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:.1rem;">of recent {{ recent_logs|length }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Today's hourly coverage -->
+<div class="card mb-4">
+  <div class="card-header card-header-navy fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clock-history me-2"></i>Today's Hourly Coverage — {{ today.strftime('%d %b %Y') }}</span>
+    <span class="badge rounded-pill" style="background:rgba(201,168,76,.22);color:var(--ihc-gold-light);border:1px solid rgba(201,168,76,.4);">{{ today_count }} log(s)</span>
+  </div>
+  <div class="card-body">
+    {% if coverage %}
+      {% for equip in coverage %}
+      <div class="cov-block">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="cov-equip"><i class="bi bi-cpu"></i>{{ equip.name }}</div>
+          <span class="cov-count">{{ equip.hours|length }} h logged</span>
+        </div>
+        <div class="d-flex flex-wrap gap-1">
+          {% for h in equip.hours %}
+          <span class="hour-pill">{{ '%02d:00'|format(h) }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="text-center py-4">
+        <i class="bi bi-clock" style="font-size:2rem;color:var(--ihc-gold);opacity:.5;"></i>
+        <p class="text-muted small mb-1 mt-2">No logs submitted yet today.</p>
+        <a href="{{ url_for('worker.log_new') }}" class="btn btn-sm btn-primary mt-1">
+          <i class="bi bi-plus-circle me-1"></i>Submit your first hourly log
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <!-- Recent submissions -->
+  <div class="col-lg-7 mb-4">
+    <div class="card h-100">
+      <div class="card-header card-header-navy fw-semibold">
+        <i class="bi bi-clock-history me-2"></i>My Recent Submissions <span class="text-muted">(last 20)</span>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_logs %}
+        <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Equipment</th>
+              <th>Status</th>
+              <th>Review</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in recent_logs %}
+            <tr>
+              <td class="small">{{ log.log_date.strftime('%d %b') }}</td>
+              <td class="small">{{ log.log_time.strftime('%H:%M') }}</td>
+              <td>
+                <div class="fw-semibold small">{{ log.equipment.name }}</div>
+                <div class="text-muted" style="font-size:.75rem;">{{ log.equipment.department.name }}</div>
+              </td>
+              <td>
+                <span class="badge badge-{{ log.status|lower }}">{{ log.status }}</span>
+              </td>
+              <td>
+                {% set rs = log.review_status %}
+                {% if rs == 'Approved' %}
+                  <span class="review-approved"><i class="bi bi-check-circle-fill"></i> Approved</span>
+                {% elif rs == 'NeedsAttention' %}
+                  <span class="review-needsattention"><i class="bi bi-exclamation-triangle-fill"></i> Needs Attention</span>
+                {% else %}
+                  <span class="review-pending"><i class="bi bi-hourglass-split"></i> Pending</span>
+                {% endif %}
+              </td>
+              <td class="d-flex gap-1">
+                <a href="{{ url_for('worker.log_view', log_id=log.id) }}"
+                   class="btn btn-sm btn-outline-primary">View</a>
+                {% if log.is_editable %}
+                <a href="{{ url_for('worker.log_edit', log_id=log.id) }}"
+                   class="btn btn-sm btn-warning">Edit</a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-inbox" style="font-size:2rem;"></i>
+          <p class="mt-2">No logs submitted yet.</p>
+          <a href="{{ url_for('worker.log_new') }}" class="btn btn-primary btn-sm">Submit your first log</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Supervisor feedback -->
+  <div class="col-lg-5 mb-4">
+    <div class="card h-100">
+      <div class="card-header card-header-navy fw-semibold">
+        <i class="bi bi-chat-dots me-2"></i>Supervisor Feedback
+      </div>
+      <div class="card-body">
+        {% set feedback_found = namespace(value=false) %}
+        {% for log in recent_logs %}
+          {% if log.latest_remark %}
+            {% set feedback_found.value = true %}
+            <div class="border-bottom pb-2 mb-2">
+              <div class="fw-semibold small">{{ log.equipment.name }}
+                <span class="text-muted fw-normal">— {{ log.log_date.strftime('%d %b') }}</span>
+              </div>
+              <p class="ihc-remark mt-1 mb-1" style="font-size:.82rem;">"{{ log.latest_remark.remark }}"</p>
+              {% set rs = log.latest_remark.review_status %}
+              {% if rs == 'Approved' %}
+                <span class="badge bg-success mt-1">Approved</span>
+              {% elif rs == 'NeedsAttention' %}
+                <span class="badge bg-danger mt-1">Needs Attention</span>
+              {% else %}
+                <span class="badge bg-warning text-dark mt-1">Pending</span>
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endfor %}
+        {% if not feedback_found.value %}
+          <div class="text-center py-4 text-muted">
+            <i class="bi bi-chat-square" style="font-size:2rem;"></i>
+            <p class="mt-2 small">No supervisor comments yet.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── 1. Stat card entrance — staggered fade+rise ──────── */
+  if (!reduced) {
+    document.querySelectorAll('.stat-card').forEach(function (card, i) {
+      card.style.animation = 'card-enter 0.42s ease-out ' + (i * 100) + 'ms both';
+    });
+  }
+
+  /* ── 2. Count-up for stat values ──────────────────────── */
+  function countUp(el, delayMs) {
+    var target = parseInt(el.textContent, 10);
+    if (isNaN(target) || target === 0 || reduced) return;
+
+    var duration = 560, startTime = null;
+    el.textContent = '0';
+    function tick(now) {
+      if (!startTime) startTime = now + delayMs;
+      var elapsed = now - startTime;
+      if (elapsed < 0) { requestAnimationFrame(tick); return; }
+      var t = Math.min(elapsed / duration, 1);
+      var eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(eased * target);
+      if (t < 1) requestAnimationFrame(tick);
+      else el.textContent = target;
+    }
+    requestAnimationFrame(tick);
+  }
+  document.querySelectorAll('.stat-value').forEach(function (el, i) {
+    countUp(el, i * 100);
+  });
+
+  /* ── 3. Coverage hour pills — staggered scale-pop ─────── */
+  if (!reduced) {
+    document.querySelectorAll('.hour-pill').forEach(function (pill, i) {
+      pill.style.animation = 'badge-pop 0.2s ease-out ' + (i * 40 + 250) + 'ms both';
+    });
+  }
+
+  /* ── 4. Table badge entrance — staggered pop-in ─────── */
+  if (!reduced) {
+    document.querySelectorAll('tbody tr').forEach(function (row, i) {
+      row.querySelectorAll('.badge').forEach(function (badge) {
+        badge.style.animation = 'badge-pop 0.22s ease-out ' + (i * 35 + 300) + 'ms both';
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

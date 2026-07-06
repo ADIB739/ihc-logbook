@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Manage Users — IHC Logbook{% endblock %}
+
+{% block extra_head %}
+<style>
+  .role-pill-sup { background: var(--ihc-navy) !important; color: #fff !important; font-size: .72rem; padding: 3px 9px; border-radius: 10px; font-weight: 600; }
+  .role-pill-worker { background: #0891b2 !important; color: #fff !important; font-size: .72rem; padding: 3px 9px; border-radius: 10px; font-weight: 600; }
+  .status-live { color: #059669; font-size: .82rem; font-weight: 600; }
+  .status-live i { font-size: .45rem; vertical-align: middle; }
+  .status-off { color: #94a3b8; font-size: .82rem; }
+  .add-user-btn { background: linear-gradient(135deg, var(--ihc-navy), var(--ihc-navy-mid)); color: #fff !important; font-weight: 600; border: none; border-radius: 9px; padding: .45rem 1rem; box-shadow: 0 4px 12px rgba(12,31,69,.22); transition: box-shadow .15s, transform .15s; }
+  .add-user-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(12,31,69,.32); color: #fff; }
+  .add-user-btn i { color: var(--ihc-gold); }
+  .modal-header-navy { background: linear-gradient(135deg, var(--ihc-navy) 0%, var(--ihc-navy-mid) 100%); color: #fff; border-bottom: 2px solid var(--ihc-gold); }
+  .modal-header-navy .modal-title { color: #fff !important; }
+  .modal-header-navy .btn-close { filter: invert(1) brightness(1.5); }
+  .pw-reset-badge { background: rgba(245,158,11,.15); color: #92400e; border: 1px solid rgba(245,158,11,.4); font-size: .65rem; padding: 2px 6px; border-radius: 8px; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center page-header">
+  <div>
+    <h4 class="mb-0">Manage Users</h4>
+    <div class="page-subtitle"><i class="bi bi-people me-1"></i>Add workers and supervisors, reset passwords, or deactivate accounts.</div>
+  </div>
+  <button class="add-user-btn" data-bs-toggle="modal" data-bs-target="#addUserModal">
+    <i class="bi bi-person-plus me-1"></i>Add User
+  </button>
+</div>
+
+<!-- User table -->
+<div class="card">
+  <div class="card-header card-header-navy fw-semibold"><i class="bi bi-people me-1"></i>All Accounts</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Department</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr class="{% if not user.is_active %}text-muted{% endif %}">
+            <td class="fw-semibold">
+              {{ user.name }}
+              {% if user.must_change_password %}
+                <span class="pw-reset-badge ms-1" title="Must change password"><i class="bi bi-key me-1"></i>PW Reset</span>
+              {% endif %}
+            </td>
+            <td class="small text-muted">{{ user.email }}</td>
+            <td>
+              {% if user.role == 'supervisor' %}
+                <span class="role-pill-sup">Supervisor</span>
+              {% else %}
+                <span class="role-pill-worker">Worker</span>
+              {% endif %}
+            </td>
+            <td class="small">{{ user.department.name if user.department else '—' }}</td>
+            <td>
+              {% if user.is_active %}
+                <span class="status-live"><i class="bi bi-circle-fill me-1"></i>Active</span>
+              {% else %}
+                <span class="status-off"><i class="bi bi-circle me-1"></i>Inactive</span>
+              {% endif %}
+            </td>
+            <td>
+              <!-- Reset password -->
+              <button class="btn btn-sm btn-outline-secondary me-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#resetModal{{ user.id }}">
+                <i class="bi bi-key"></i> Reset PW
+              </button>
+              <!-- Activate / Deactivate -->
+              {% if user.id != current_user.id %}
+              <form method="POST" action="{{ url_for('supervisor.user_toggle', user_id=user.id) }}"
+                    class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="btn btn-sm {% if user.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+                  {% if user.is_active %}
+                    <i class="bi bi-person-dash"></i> Deactivate
+                  {% else %}
+                    <i class="bi bi-person-check"></i> Activate
+                  {% endif %}
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- Reset password modal for each user -->
+          <div class="modal fade" id="resetModal{{ user.id }}" tabindex="-1">
+            <div class="modal-dialog modal-sm">
+              <div class="modal-content">
+                <div class="modal-header modal-header-navy">
+                  <h6 class="modal-title"><i class="bi bi-key me-2"></i>Reset Password — {{ user.name }}</h6>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST"
+                      action="{{ url_for('supervisor.user_reset_password', user_id=user.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="modal-body">
+                    <p class="small text-muted">Set a temporary password. The user will be required to change it on next login.</p>
+                    <input type="password" class="form-control" name="new_password"
+                           placeholder="New password (min 6 chars)" minlength="6" required>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                      <i class="bi bi-key me-1"></i>Reset
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add user modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header modal-header-navy">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Add New User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('supervisor.user_add') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="name"
+                   placeholder="e.g. Full Name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
+            <input type="email" class="form-control" name="email"
+                   placeholder="e.g. name@example.com" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Temporary Password <span class="text-danger">*</span></label>
+            <input type="password" class="form-control" name="password"
+                   placeholder="Min 6 characters" minlength="6" required>
+            <div class="form-text">User will be asked to change this on first login.</div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Role <span class="text-danger">*</span></label>
+              <select class="form-select" name="role" required>
+                <option value="worker">Worker</option>
+                <option value="supervisor">Supervisor</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Department</label>
+              <select class="form-select" name="dept_id">
+                <option value="">None</option>
+                {% for dept in departments %}
+                <option value="{{ dept.id }}">{{ dept.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-person-check me-1"></i>Create User
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}Sign In — IHC Engineering Logbook{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Login page navy background ─────────────────────── */
+  body {
+    background: linear-gradient(135deg, #07142e 0%, #0c1f45 45%, #0a1a38 100%) !important;
+    min-height: 100vh;
+  }
+
+  /* ── Full-viewport blueprint grid overlay ───────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(201,168,76,.14) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,.14) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* Diagonal scan sweep across login background */
+  body::after {
+    content: '';
+    position: fixed; top: 0; bottom: 0; left: 0;
+    width: 360px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(201,168,76,.3) 50%,
+      transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+    transform: skewX(-10deg) translateX(-360px);
+    animation: ihc-login-sweep 8s linear infinite;
+  }
+  @keyframes ihc-login-sweep {
+    from { transform: skewX(-10deg) translateX(-360px); }
+    to   { transform: skewX(-10deg) translateX(2700px); }
+  }
+
+  /* ── Layout ─────────────────────────────────────────── */
+  .login-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 860px;
+    border-radius: 20px;
+    overflow: hidden;
+    /* Gold border glow — the "floating on the monitoring grid" effect */
+    box-shadow:
+      0 30px 80px rgba(0,0,0,.55),
+      0 0 0 1px rgba(201,168,76,.3),
+      0 0 70px rgba(201,168,76,.07),
+      inset 0 1px 0 rgba(255,255,255,.04);
+    display: flex;
+  }
+
+  /* ── Left brand panel ───────────────────────────────── */
+  .login-brand {
+    width: 42%;
+    /* Circuit grid baked into the brand panel background */
+    background-image:
+      linear-gradient(rgba(201,168,76,.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,.12) 1px, transparent 1px),
+      linear-gradient(160deg, #0a1c40 0%, #12285c 60%, #0c2050 100%);
+    background-size: 36px 36px, 36px 36px, auto;
+    padding: 3rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Schematic corner brackets — top-right */
+  .login-brand::before {
+    content: '';
+    position: absolute;
+    top: 18px; right: 18px;
+    width: 48px; height: 48px;
+    border-top: 1px solid rgba(201,168,76,.4);
+    border-right: 1px solid rgba(201,168,76,.4);
+    pointer-events: none;
+  }
+  /* Schematic corner bracket — bottom-left */
+  .login-brand::after {
+    content: '';
+    position: absolute;
+    bottom: 18px; left: 18px;
+    width: 48px; height: 48px;
+    border-bottom: 1px solid rgba(201,168,76,.4);
+    border-left: 1px solid rgba(201,168,76,.4);
+    pointer-events: none;
+  }
+
+  /* ── Logo box with pulsing system-live dot ──────────── */
+  .brand-logo-box {
+    width: 52px; height: 52px;
+    background: rgba(201,168,76,.18);
+    border: 1px solid rgba(201,168,76,.3);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1.4rem;
+    position: relative;
+  }
+  .brand-logo-box i { font-size: 1.5rem; color: #c9a84c; }
+  /* Green "system live" indicator dot */
+  .brand-logo-box::after {
+    content: '';
+    position: absolute;
+    top: -4px; right: -4px;
+    width: 11px; height: 11px;
+    background: #22c55e;
+    border-radius: 50%;
+    border: 2px solid #07142e;
+    box-shadow: 0 0 12px 3px rgba(34,197,94,.6);
+    animation: ihc-status-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes ihc-status-pulse {
+    0%, 100% { opacity: 1;   transform: scale(1);   box-shadow: 0 0 8px 2px rgba(34,197,94,.4); }
+    50%       { opacity: .35; transform: scale(.82); box-shadow: 0 0 22px 7px rgba(34,197,94,1.0); }
+  }
+
+  /* ── Brand typography ───────────────────────────────── */
+  .brand-org  { font-size: 1.5rem; font-weight: 800; color: #c9a84c; letter-spacing: .5px; }
+  .brand-name { font-size: .95rem; color: rgba(255,255,255,.85); font-weight: 500; margin-top: .1rem; }
+  .brand-city { font-size: .78rem; color: rgba(255,255,255,.4); margin-top: .2rem; }
+  .brand-divider {
+    height: 1px;
+    background: linear-gradient(to right, rgba(201,168,76,.45), transparent);
+    margin: 1.5rem 0;
+  }
+  .brand-tagline { font-size: .82rem; color: rgba(255,255,255,.55); line-height: 1.6; }
+  .brand-tagline strong { color: rgba(255,255,255,.85); }
+  .brand-dots { display: flex; gap: 6px; margin-top: 1.5rem; }
+  .brand-dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: rgba(201,168,76,.5);
+    display: inline-block;
+  }
+  .brand-dots span:first-child { background: #c9a84c; }
+  .brand-dots span:last-child  { background: rgba(201,168,76,.2); }
+
+  /* ── Right form panel ───────────────────────────────── */
+  .login-form-panel {
+    flex: 1;
+    background: #fff;
+    padding: 3rem 2.75rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .login-form-panel h2 { font-size: 1.4rem; font-weight: 700; color: #0c1f45; margin-bottom: .25rem; }
+  .login-form-panel .subtitle { font-size: .83rem; color: #8898aa; margin-bottom: 2rem; }
+  .login-form-panel .form-label {
+    font-size: .8rem; font-weight: 600; color: #374560;
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  .login-form-panel .form-control {
+    border: 1.5px solid #dde3ee;
+    border-radius: 9px;
+    padding: .65rem .9rem;
+    font-size: .9rem;
+    color: #0c1f45;
+    background: #f8fafc;
+    transition: border .2s, box-shadow .2s;
+  }
+  .login-form-panel .form-control:focus {
+    border-color: #0c1f45;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(12,31,69,.1);
+  }
+  .login-form-panel .form-control::placeholder { color: #aab4c8; }
+  .btn-signin {
+    background: linear-gradient(135deg, #0c1f45, #162d5e);
+    border: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: .9rem;
+    padding: .72rem;
+    border-radius: 10px;
+    letter-spacing: .3px;
+    transition: transform .15s, box-shadow .15s;
+    width: 100%;
+  }
+  .btn-signin:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(12,31,69,.3);
+    color: #fff;
+  }
+  .btn-signin:active { transform: none; }
+  .login-footer { font-size: .76rem; color: #aab4c8; text-align: center; margin-top: 1.5rem; }
+  .input-icon-wrap { position: relative; }
+  .input-icon-wrap .input-icon {
+    position: absolute; left: .85rem; top: 50%; transform: translateY(-50%);
+    color: #aab4c8; font-size: .95rem; pointer-events: none;
+  }
+  .input-icon-wrap .form-control { padding-left: 2.4rem; }
+
+  /* ── Mobile ─────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .login-card { flex-direction: column; max-width: 420px; }
+    .login-brand { width: 100%; padding: 2rem 1.75rem 1.5rem; }
+    .login-form-panel { padding: 2rem 1.75rem 2.5rem; }
+  }
+
+  /* ── Reduced motion: freeze all login-page animations ── */
+  @media (prefers-reduced-motion: reduce) {
+    body::after,
+    .brand-logo-box::after { animation: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-wrap">
+  <div class="login-card">
+
+    <!-- Brand panel -->
+    <div class="login-brand">
+      <div>
+        <img src="{{ url_for('static', filename='ihc-logo.png') }}"
+             alt="India Habitat Centre"
+             style="width:100%;max-width:220px;border-radius:8px;margin-bottom:1.6rem;display:block;">
+        <div class="brand-city" style="margin-top:-.8rem;margin-bottom:.2rem;">Lodhi Road, New Delhi</div>
+        <div class="brand-divider"></div>
+        <div class="brand-tagline">
+          <strong>Engineering Operations</strong><br>
+          Digital Logbook System<br><br>
+          Real-time monitoring, compliance tracking, and operational records for all IHC engineering departments.
+        </div>
+      </div>
+      <div>
+        <div class="brand-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.28);margin-top:.6rem;">
+          Powered by IHC Engineering
+        </div>
+      </div>
+    </div>
+
+    <!-- Form panel -->
+    <div class="login-form-panel">
+      <h2>Welcome back</h2>
+      <div class="subtitle">Sign in to access the engineering logbook</div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else category }} py-2 mb-3" style="font-size:.83rem;border-radius:9px;">
+            <i class="bi bi-exclamation-circle me-1"></i>{{ message }}
+          </div>
+        {% endfor %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('auth.login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-3">
+          <label class="form-label" for="email">Email address</label>
+          <div class="input-icon-wrap">
+            <i class="bi bi-envelope input-icon"></i>
+            <input type="email" class="form-control" id="email" name="email"
+                   placeholder="you@ihc.in" required autofocus>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label" for="password">Password</label>
+          <div class="input-icon-wrap">
+            <i class="bi bi-lock input-icon"></i>
+            <input type="password" class="form-control" id="password" name="password"
+                   placeholder="Enter your password" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-signin">
+          <i class="bi bi-arrow-right-circle me-2"></i>Sign In
+        </button>
+      </form>
+
+      <div class="login-footer">
+        Don't have an account? Contact your supervisor.
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
