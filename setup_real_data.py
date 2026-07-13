@@ -14,12 +14,9 @@ What this does:
 
 Run: python setup_real_data.py
 """
-from app import create_app
 from app.extensions import db
 from app.models import Department, Equipment, EquipmentParam
 from sqlalchemy import text
-
-app = create_app()
 
 # ── Real Chiller-1 parameters from IHC Water Cooled Chiller Plant Log ─────────
 # Format: (section, param_name, unit, display_order)
@@ -260,6 +257,8 @@ def _apply_subsection_params(equip, param_rows):
 
 
 def run():
+    from app import create_app
+    app = create_app()
     with app.app_context():
         # 1. Add `section` and `subsection` columns if they don't exist yet
         for col_def in [

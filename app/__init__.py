@@ -56,4 +56,46 @@ def create_app(config_class=Config):
     with app.app_context():
         db.create_all()
 
+    _sync_real_equipment_on_startup(app)
+
     return app
+
+
+def _sync_real_equipment_on_startup(app):
+    """Seed the real IHC equipment (Chillers, VFD, Transformers, Gensets, etc.)
+    into the database on startup.
+
+    This runs here — inside the app process — rather than in build.sh, because
+    Render's build environment cannot reach the runtime Postgres database. It is
+    guarded so it only runs in production, only once per container (a file lock
+    prevents the multiple gunicorn workers from racing), and never crashes boot.
+    """
+    import os
+
+    # Production only: local dev / tests use the `python setup_real_data.py` CLI.
+    if not os.environ.get("DATABASE_URL"):
+        return
+    # Recursion guard: setup_real_data.run() builds its own app via create_app();
+    # this flag stops that inner create_app from triggering the sync again.
+    if os.environ.get("_IHC_SYNC_ACTIVE"):
+        return
+
+    # Single-run lock: only the first worker in a fresh container runs the sync.
+    # /tmp is per-container on Render, so a new deploy re-runs it automatically.
+    import tempfile
+    lock_path = os.path.join(tempfile.gettempdir(), "ihc_equipment_sync.lock")
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)
+    except FileExistsError:
+        return  # another worker already claimed the sync
+
+    os.environ["_IHC_SYNC_ACTIVE"] = "1"
+    try:
+        from setup_real_data import run as sync_equipment
+        sync_equipment()
+        app.logger.info("Real equipment sync completed on startup.")
+    except Exception:
+        app.logger.exception("Real equipment sync failed on startup (app still boots).")
+    finally:
+        os.environ.pop("_IHC_SYNC_ACTIVE", None)
