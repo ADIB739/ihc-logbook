@@ -54,12 +54,38 @@ def dashboard():
         .limit(20)
         .all()
     )
+
+    # ── Log history: view this worker's submissions for any past date ──────────
+    from datetime import timedelta
+    history_date_str = request.args.get("history_date")
+    try:
+        history_date = date.fromisoformat(history_date_str) if history_date_str else today
+    except ValueError:
+        history_date = today
+    # Never allow a future date
+    if history_date > today:
+        history_date = today
+
+    history_logs = (
+        LogEntry.query
+        .filter_by(worker_id=current_user.id)
+        .filter(LogEntry.log_date == history_date)
+        .order_by(LogEntry.log_time)
+        .all()
+    )
+    history_prev = history_date - timedelta(days=1)
+    history_next = history_date + timedelta(days=1)
+
     return render_template(
         "worker/dashboard.html",
         recent_logs=recent_logs,
         today_count=today_count,
         coverage=coverage,
         today=today,
+        history_logs=history_logs,
+        history_date=history_date,
+        history_prev=history_prev,
+        history_next=history_next,
     )
 
 

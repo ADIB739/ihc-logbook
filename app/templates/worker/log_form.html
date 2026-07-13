@@ -342,6 +342,8 @@
         {% if params %}
           {# Sections where params come in pump/fan groups of 3 phases (R, Y, B) #}
           {% set pump_sections = ['Secondary Pump', 'Primary Pump', 'Condenser Pump', 'C.T Fan'] %}
+          {# Params that hold text (e.g. Healthy/Trip status) rather than numbers #}
+          {% set text_params = ['Trip CKT', 'Trip CKT Condition'] %}
           {% set ns = namespace(current_section=None, current_pump=None, current_subsection='__unset__', row_open=False) %}
           {% for p in params %}
 
@@ -375,10 +377,11 @@
                   {% if p.unit %}<span class="text-muted">({{ p.unit }})</span>{% endif %}
                 </label>
                 <div class="input-group input-group-sm">
-                  <input type="number" step="0.01" class="form-control"
+                  {% set is_text = p.param_name in text_params %}
+                  <input type="{{ 'text' if is_text else 'number' }}"{% if not is_text %} step="0.01"{% endif %} class="form-control"
                          name="param_{{ p.param_name }}"
                          value="{{ readings_map.get(p.param_name, '') if readings_map else '' }}"
-                         placeholder="—">
+                         placeholder="{{ 'e.g. Healthy / Trip' if is_text else '—' }}">
                   {% if p.unit %}<span class="input-group-text">{{ p.unit }}</span>{% endif %}
                 </div>
               </div>
@@ -412,10 +415,11 @@
                   {% if p.unit %}<span class="text-muted">({{ p.unit }})</span>{% endif %}
                 </label>
                 <div class="input-group input-group-sm">
-                  <input type="number" step="0.01" class="form-control"
+                  {% set is_text = p.param_name in text_params %}
+                  <input type="{{ 'text' if is_text else 'number' }}"{% if not is_text %} step="0.01"{% endif %} class="form-control"
                          name="param_{{ p.param_name }}"
                          value="{{ readings_map.get(p.param_name, '') if readings_map else '' }}"
-                         placeholder="—">
+                         placeholder="{{ 'e.g. Healthy / Trip' if is_text else '—' }}">
                   {% if p.unit %}<span class="input-group-text">{{ p.unit }}</span>{% endif %}
                 </div>
               </div>
