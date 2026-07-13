@@ -1,6 +1,77 @@
 {% extends "base.html" %}
 {% block title %}Supervisor Dashboard — IHC Logbook{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* ── Pending Reviews banner ─────────────────────────────── */
+  .pending-banner {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: linear-gradient(120deg, #7c2d12 0%, #b45309 45%, #d97706 100%);
+    box-shadow: 0 10px 30px rgba(180,83,9,.28), 0 0 0 1px rgba(217,119,6,.25);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  a:hover > .pending-banner {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 40px rgba(180,83,9,.38), 0 0 0 1px rgba(217,119,6,.4);
+  }
+  .pending-banner--clear {
+    background: linear-gradient(120deg, #ecfdf5 0%, #d1fae5 100%);
+    box-shadow: 0 6px 18px rgba(5,150,105,.14), 0 0 0 1px rgba(5,150,105,.18);
+  }
+  /* Blueprint grid + soft glow accents */
+  .pending-banner-glow {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(420px 160px at 88% -20%, rgba(255,255,255,.22), transparent 70%),
+      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 100% 100%, 26px 26px, 26px 26px;
+    pointer-events: none;
+  }
+  .pending-banner-inner {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 1rem;
+    padding: 1.15rem 1.6rem;
+  }
+  .pending-banner-icon {
+    width: 54px; height: 54px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 14px;
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.28);
+    color: #fff; font-size: 1.5rem;
+  }
+  .pending-banner-icon--clear {
+    background: rgba(5,150,105,.12);
+    border-color: rgba(5,150,105,.3);
+    color: #059669;
+  }
+  .pending-banner-count {
+    font-size: 2.1rem; font-weight: 800; line-height: 1;
+    color: #fff; letter-spacing: -.02em;
+  }
+  .pending-banner-label {
+    font-size: .92rem; font-weight: 600; margin-top: .25rem;
+    color: rgba(255,255,255,.92);
+  }
+  .pending-banner-sub { font-weight: 400; color: rgba(255,255,255,.62); }
+  .pending-banner-cta {
+    font-weight: 700; font-size: .92rem; color: #7c2d12;
+    background: #fff; border-radius: 10px;
+    padding: .6rem 1.15rem; white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,.14);
+    transition: gap .15s;
+  }
+  a:hover .pending-banner-cta { background: #fffbeb; }
+  @media (prefers-reduced-motion: reduce) {
+    .pending-banner, a:hover > .pending-banner { transition: none; transform: none; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center page-header">
   <div>
@@ -11,6 +82,46 @@
     <i class="bi bi-list-ul me-1"></i>View All Logs
   </a>
 </div>
+
+<!-- ══ Pending Reviews queue banner (all dates) ══════════════════════ -->
+{% if pending_all > 0 %}
+<a href="{{ url_for('supervisor.pending_reviews') }}" class="text-decoration-none">
+  <div class="pending-banner mb-4">
+    <div class="pending-banner-glow"></div>
+    <div class="pending-banner-inner">
+      <div class="d-flex align-items-center gap-3">
+        <div class="pending-banner-icon">
+          <i class="bi bi-hourglass-split"></i>
+        </div>
+        <div>
+          <div class="pending-banner-count">{{ pending_all }}</div>
+          <div class="pending-banner-label">
+            log{{ 's' if pending_all != 1 else '' }} awaiting your review
+            <span class="pending-banner-sub">— across all dates</span>
+          </div>
+        </div>
+      </div>
+      <span class="pending-banner-cta">
+        Review all pending <i class="bi bi-arrow-right ms-1"></i>
+      </span>
+    </div>
+  </div>
+</a>
+{% else %}
+<div class="pending-banner pending-banner--clear mb-4">
+  <div class="pending-banner-inner">
+    <div class="d-flex align-items-center gap-3">
+      <div class="pending-banner-icon pending-banner-icon--clear">
+        <i class="bi bi-check2-all"></i>
+      </div>
+      <div>
+        <div class="pending-banner-count" style="color:#059669;">All caught up</div>
+        <div class="pending-banner-label" style="color:#047857;">No logs are waiting for review right now.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- Stat cards -->
 <div class="row g-3 mb-4">

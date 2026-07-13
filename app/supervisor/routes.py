@@ -70,6 +70,20 @@ def dashboard():
         .count()
     )
 
+    # All-time pending: every log (any date) that has not yet been actioned
+    # (no remark, or its remark is still "Pending"). Powers the pending queue.
+    handled_ids_subq = (
+        db.session.query(SupervisorRemark.log_id)
+        .filter(SupervisorRemark.review_status != "Pending")
+        .distinct()
+        .scalar_subquery()
+    )
+    pending_all = (
+        LogEntry.query
+        .filter(~LogEntry.id.in_(handled_ids_subq))
+        .count()
+    )
+
     # FIX 3: one query for all today's logs instead of 1-per-equipment loop
     from sqlalchemy.orm import joinedload, selectinload
     from collections import defaultdict
@@ -144,6 +158,7 @@ def dashboard():
         "supervisor/dashboard.html",
         total_today=total_today,
         pending=pending,
+        pending_all=pending_all,
         approved=approved,
         needs_attention=needs_attention,
         re_review_count=re_review_count,
@@ -152,6 +167,72 @@ def dashboard():
         recent_remarks=recent_remarks,
         today=today,
         now_hour=ist_now().hour,
+    )
+
+
+# ─── Pending Reviews Queue ────────────────────────────────────────────────────
+
+@supervisor_bp.route("/pending")
+@login_required
+@supervisor_required
+def pending_reviews():
+    """All logs (any date) still awaiting review, oldest first — a work queue."""
+    from datetime import datetime
+    from sqlalchemy.orm import joinedload, selectinload
+
+    handled_ids_subq = (
+        db.session.query(SupervisorRemark.log_id)
+        .filter(SupervisorRemark.review_status != "Pending")
+        .distinct()
+        .scalar_subquery()
+    )
+    base_q = (
+        LogEntry.query
+        .options(
+            joinedload(LogEntry.equipment).joinedload(Equipment.department),
+            joinedload(LogEntry.worker),
+            selectinload(LogEntry.supervisor_remarks),
+        )
+        .filter(~LogEntry.id.in_(handled_ids_subq))
+    )
+    total = base_q.count()
+
+    PER_PAGE = 25
+    page = request.args.get("page", 1, type=int)
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = max(1, min(page, total_pages))
+
+    logs = (
+        base_q
+        .order_by(LogEntry.log_date.asc(), LogEntry.log_time.asc())
+        .offset((page - 1) * PER_PAGE)
+        .limit(PER_PAGE)
+        .all()
+    )
+
+    # Attach a human-readable "waiting" age (submitted_at is naive UTC)
+    now_utc = datetime.utcnow()
+    for log in logs:
+        delta = now_utc - log.submitted_at
+        secs = max(0, delta.total_seconds())
+        days = int(secs // 86400)
+        hours = int((secs % 86400) // 3600)
+        mins = int((secs % 3600) // 60)
+        if days > 0:
+            log.waiting_str = f"{days}d {hours}h"
+        elif hours > 0:
+            log.waiting_str = f"{hours}h {mins}m"
+        else:
+            log.waiting_str = f"{mins}m"
+        log.waiting_days = days
+
+    return render_template(
+        "supervisor/pending_reviews.html",
+        logs=logs,
+        total=total,
+        page=page,
+        total_pages=total_pages,
+        today=ist_today(),
     )
 
 

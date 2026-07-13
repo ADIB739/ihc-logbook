@@ -634,6 +634,12 @@
         <hr>
         <div class="sidebar-label">Quick Access</div>
         <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'supervisor.pending_reviews' %}active{% endif %}"
+             data-bs-dismiss="offcanvas" href="{{ url_for('supervisor.pending_reviews') }}">
+            <i class="bi bi-hourglass-split me-2" style="color:#fbbf24;"></i>Pending Reviews
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link" data-bs-dismiss="offcanvas"
              href="{{ url_for('supervisor.log_list') }}?date_from={{ today }}&date_to={{ today }}">
             <i class="bi bi-calendar-day me-2"></i>Today's Logs
@@ -710,6 +716,12 @@
           </li>
           <hr>
           <div class="sidebar-label">Quick Access</div>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'supervisor.pending_reviews' %}active{% endif %}"
+               href="{{ url_for('supervisor.pending_reviews') }}">
+              <i class="bi bi-hourglass-split me-2" style="color:#fbbf24;"></i>Pending Reviews
+            </a>
+          </li>
           <li class="nav-item">
             <a class="nav-link"
                href="{{ url_for('supervisor.log_list') }}?date_from={{ today }}&date_to={{ today }}">
