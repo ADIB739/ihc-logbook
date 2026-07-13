@@ -272,6 +272,19 @@ FIGHTING_CHECKLIST = [
 ]
 
 
+# ── Fire Dept — "Shift Round" checklist (2nd logbook) ─────────────────────────
+# A grid: each SYSTEM (section) is checked across every ZONE (item), OK per cell,
+# once per shift. Param names are "System - Zone" so they stay unique; the form
+# shows just the zone under each system heading.
+
+SHIFT_ROUND_SYSTEMS = [
+    "Staircase", "FHC", "Extinguisher", "Detectors/MCP", "Signage", "Fire Alarm Panel",
+]
+SHIFT_ROUND_ZONES = [
+    "Room Block", "Lite Zone", "C.C.", "Audi.", "6C", "5A", "5B", "7A", "6A", "4B", "4A",
+]
+
+
 def _apply_checklist_params(equip, section, items):
     """Replace params for a checklist unit. `items` is a list of param names."""
     EquipmentParam.query.filter_by(equipment_id=equip.id).delete()
@@ -285,6 +298,25 @@ def _apply_checklist_params(equip, section, items):
             input_type="check",
             display_order=order,
         ))
+
+
+def _apply_grid_checklist(equip, systems, zones):
+    """Replace params for a System x Zone checklist grid. Returns the item count."""
+    EquipmentParam.query.filter_by(equipment_id=equip.id).delete()
+    db.session.flush()
+    order = 0
+    for system in systems:
+        for zone in zones:
+            order += 1
+            db.session.add(EquipmentParam(
+                equipment_id=equip.id,
+                param_name=f"{system} - {zone}",
+                unit="",
+                section=system,
+                input_type="check",
+                display_order=order,
+            ))
+    return order
 
 
 def sync_fire_department():
@@ -318,6 +350,25 @@ def sync_fire_department():
     _apply_checklist_params(fighting, "Daily Fire Pumps Inspection", FIGHTING_CHECKLIST)
     db.session.commit()
     print(f"  [Fighting-1]  {len(FIGHTING_CHECKLIST)} checklist items (OK / Not OK / N/A per shift).")
+
+    # Shift Round-1 — Shift Round Checklist (System x Zone grid), 2nd logbook
+    shift_round = Equipment.query.filter_by(name="Shift Round-1").first()
+    if not shift_round:
+        shift_round = Equipment(dept_id=fire.id, name="Shift Round-1", is_active=True,
+                                description="Shift Round Checklist — IHC (Pacific Fire Controls)")
+        db.session.add(shift_round)
+        db.session.flush()
+        print("  Created Shift Round-1 equipment.")
+    else:
+        shift_round.dept_id = fire.id
+        shift_round.is_active = True
+        db.session.flush()
+        print(f"  Found existing Shift Round-1 (id={shift_round.id}).")
+
+    n = _apply_grid_checklist(shift_round, SHIFT_ROUND_SYSTEMS, SHIFT_ROUND_ZONES)
+    db.session.commit()
+    print(f"  [Shift Round-1]  {n} checklist items "
+          f"({len(SHIFT_ROUND_SYSTEMS)} systems x {len(SHIFT_ROUND_ZONES)} zones).")
 
 
 def fix_user_directory():

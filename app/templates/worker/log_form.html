@@ -416,7 +416,13 @@
             {% set cur = (readings_map.get(p.param_name) if readings_map else None) or 'OK' %}
             <div class="chk-item">
               <div class="chk-row">
-                <div class="chk-text"><span class="chk-num">{{ loop.index }}</span><span>{{ p.param_name }}</span></div>
+                <div class="chk-text">
+                  {% if ' - ' in p.param_name %}
+                    <span>{{ p.param_name.split(' - ')[-1] }}</span>
+                  {% else %}
+                    <span class="chk-num">{{ loop.index }}</span><span>{{ p.param_name }}</span>
+                  {% endif %}
+                </div>
                 <div class="btn-group btn-group-sm chk-toggle" role="group">
                   <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
                          id="chk{{ loop.index }}_ok" value="OK" autocomplete="off" {% if cur == 'OK' %}checked{% endif %}>
