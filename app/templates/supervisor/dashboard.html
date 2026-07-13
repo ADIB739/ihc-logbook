@@ -69,6 +69,48 @@
   @media (prefers-reduced-motion: reduce) {
     .pending-banner, a:hover > .pending-banner { transition: none; transform: none; }
   }
+
+  /* ── Compact hourly coverage heatmap ─────────────────────── */
+  .cov-axis { display: flex; align-items: center; gap: .6rem; padding: .1rem 0 .4rem; }
+  .cov-name {
+    min-width: 140px; max-width: 140px; font-size: .8rem; color: #475569;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cov-axis-cells { display: flex; gap: 2px; }
+  .cov-axis-cells span { width: 15px; font-size: .57rem; color: #9aa6bd; text-align: left; line-height: 1; }
+
+  .cov-dept { border-top: 1px solid #eef1f7; }
+  .cov-dept-head {
+    display: flex; align-items: center; gap: .55rem; flex-wrap: wrap;
+    padding: .65rem .35rem; cursor: pointer; user-select: none;
+    border-radius: 8px; transition: background .12s;
+  }
+  .cov-dept-head:hover { background: #f6f8fc; }
+  .cov-chevron { transition: transform .18s ease; color: #94a3b8; font-size: .78rem; }
+  .cov-dept-head.collapsed .cov-chevron { transform: rotate(-90deg); }
+  .cov-dept-name { font-weight: 700; color: var(--ihc-navy); font-size: .9rem; }
+  .cov-dept-logs { font-size: .72rem; color: #64748b; text-decoration: none; }
+  .cov-dept-logs:hover { color: var(--ihc-navy); text-decoration: underline; }
+  .cov-meter { width: 84px; height: 6px; border-radius: 4px; background: #e8ecf4; overflow: hidden; margin-left: auto; }
+  .cov-meter-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #059669, #34d399); }
+  .cov-meter-pct { font-size: .72rem; font-weight: 700; color: #475569; min-width: 32px; text-align: right; }
+
+  .cov-dept-body { padding: .1rem 0 .7rem; }
+  .cov-row { display: flex; align-items: center; gap: .6rem; padding: .16rem .35rem; border-radius: 6px; }
+  .cov-row:hover { background: #f6f8fc; }
+  .cov-strip { display: flex; gap: 2px; flex-wrap: nowrap; }
+  .cov-cell { width: 15px; height: 15px; border-radius: 3px; display: block; background: #f1f3f8; border: 1px solid transparent; }
+  a.cov-cell.filled { background: #059669; transition: transform .12s, background .12s; }
+  a.cov-cell.filled:hover { background: #047857; transform: scale(1.25); }
+  .cov-cell.miss { background: #f1f3f8; border-color: #e4e8f0; }
+  .cov-cell.future { background: repeating-linear-gradient(45deg,#f9fafc,#f9fafc 2px,#eef1f6 2px,#eef1f6 4px); }
+  .cov-cell.overdue { background: #fcd9b6; border-color: #f59e0b; }
+  .cov-cell.missing-old { background: #f8c9c9; border-color: #e06666; }
+  .cov-ratio { font-family: 'Courier New', monospace; font-size: .72rem; font-weight: 700; color: #64748b; margin-left: auto; min-width: 46px; text-align: right; }
+  .cov-legend { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
+  .cov-legend span { display: inline-flex; align-items: center; gap: .3rem; font-size: .68rem; color: #64748b; }
+  .cov-legend i.dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  @media (max-width: 700px) { .cov-dept-body, .cov-axis { overflow-x: auto; } }
 </style>
 {% endblock %}
 
@@ -176,41 +218,62 @@
   <!-- Hourly coverage -->
   <div class="col-12">
     <div class="card">
-      <div class="card-header card-header-navy fw-semibold d-flex justify-content-between align-items-center">
+      <div class="card-header card-header-navy fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="bi bi-grid-3x3-gap me-2"></i>Today's Hourly Coverage (00:00 – {{ '%02d:00'|format(now_hour) }})</span>
-        <span class="text-muted small">Green = submitted &nbsp;|&nbsp; Grey = missing</span>
+        <span class="cov-legend">
+          <span><i class="dot" style="background:#059669;"></i>Submitted</span>
+          <span><i class="dot" style="background:#f8c9c9;border:1px solid #e06666;"></i>Missing</span>
+          <span><i class="dot" style="background:repeating-linear-gradient(45deg,#f9fafc,#f9fafc 2px,#eef1f6 2px,#eef1f6 4px);border:1px solid #e4e8f0;"></i>Upcoming</span>
+        </span>
       </div>
       <div class="card-body">
-        {% for dept in dept_summary %}
-        <div class="mb-3">
-          <div class="fw-semibold small mb-2">
-            <a href="{{ url_for('supervisor.log_list') }}?date_from={{ today }}&date_to={{ today }}&dept_id={{ dept.id }}"
-               class="text-decoration-none text-dark">
-              <i class="bi bi-building me-1 text-muted"></i>{{ dept.name }}
-            </a>
-            <span class="badge bg-secondary ms-1">{{ dept.count }} log(s)</span>
+        {# Hour axis (00–23), labels every 3 hours #}
+        <div class="cov-axis">
+          <span class="cov-name"></span>
+          <div class="cov-axis-cells">
+            {% for h in range(0, 24) %}<span>{% if h % 3 == 0 %}{{ '%02d'|format(h) }}{% endif %}</span>{% endfor %}
           </div>
-          {% for equip in dept.equipment %}
-          <div class="d-flex align-items-start mb-1 ms-3">
-            <span class="small text-muted me-2" style="min-width:140px;padding-top:2px;">{{ equip.name }}</span>
-            <div class="d-flex flex-wrap gap-1">
-              {% for h in range(0, now_hour + 1) %}
-                {% if h in equip.hour_logs %}
-                <a href="{{ url_for('supervisor.log_detail', log_id=equip.hour_logs[h]) }}"
-                   class="badge bg-success text-decoration-none" style="font-size:.65rem;" title="{{ '%02d:00'|format(h) }} — view this log">
-                  {{ '%02d'|format(h) }}
-                </a>
-                {% else %}
-                <span class="badge bg-light text-muted border" style="font-size:.65rem;" title="{{ '%02d:00'|format(h) }} — missing">
-                  {{ '%02d'|format(h) }}
-                </span>
-                {% endif %}
+        </div>
+
+        {% for dept in dept_summary %}
+        {% set expected = (dept.equipment|length) * (now_hour + 1) %}
+        {% set pct = ((dept.count / expected * 100) | round(0, 'floor') | int) if expected else 0 %}
+        {% if pct > 100 %}{% set pct = 100 %}{% endif %}
+        <div class="cov-dept">
+          <div class="cov-dept-head" data-bs-toggle="collapse" data-bs-target="#covDept{{ dept.id }}"
+               role="button" aria-expanded="true">
+            <i class="bi bi-chevron-down cov-chevron"></i>
+            <span class="cov-dept-name">{{ dept.name }}</span>
+            <a href="{{ url_for('supervisor.log_list') }}?date_from={{ today }}&date_to={{ today }}&dept_id={{ dept.id }}"
+               class="cov-dept-logs" onclick="event.stopPropagation();">{{ dept.count }} log(s) ›</a>
+            <div class="cov-meter" title="{{ pct }}% of expected hourly logs submitted">
+              <div class="cov-meter-fill" style="width:{{ pct }}%;"></div>
+            </div>
+            <span class="cov-meter-pct">{{ pct }}%</span>
+          </div>
+          <div class="collapse show" id="covDept{{ dept.id }}">
+            <div class="cov-dept-body">
+              {% for equip in dept.equipment %}
+              <div class="cov-row">
+                <span class="cov-name" title="{{ equip.name }}">{{ equip.name }}</span>
+                <div class="cov-strip">
+                  {% for h in range(0, 24) %}
+                    {% if h in equip.hour_logs %}
+                    <a class="cov-cell filled" href="{{ url_for('supervisor.log_detail', log_id=equip.hour_logs[h]) }}"
+                       title="{{ '%02d:00'|format(h) }} — view log"></a>
+                    {% elif h <= now_hour %}
+                    <span class="cov-cell miss" data-h="{{ h }}" title="{{ '%02d:00'|format(h) }} — missing"></span>
+                    {% else %}
+                    <span class="cov-cell future" title="{{ '%02d:00'|format(h) }} — upcoming"></span>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+                <span class="cov-ratio">{{ equip.hour_logs|length }}/{{ now_hour + 1 }}</span>
+              </div>
               {% endfor %}
             </div>
           </div>
-          {% endfor %}
         </div>
-        {% if not loop.last %}<hr class="my-2">{% endif %}
         {% endfor %}
       </div>
     </div>
@@ -383,23 +446,26 @@
     countUp(el, i * 110);
   });
 
-  /* ── 3. Coverage row hover highlight ─────────────────── */
-  document.querySelectorAll('.card-body .d-flex.align-items-start.mb-1').forEach(function (row) {
-    row.classList.add('coverage-row');
-  });
-
-  /* ── 4. Missing hour badge severity colouring ────────── */
-  // bg-light text-muted border = missing hour badge in supervisor grid
-  document.querySelectorAll('.badge.bg-light.text-muted.border').forEach(function (badge) {
-    var h = parseInt(badge.textContent.trim(), 10);
+  /* ── 3. Coverage heatmap — missing-cell severity colouring ── */
+  // A missing hour becomes amber after 1h, red after 3h. The current hour
+  // is left neutral (worker may still submit within the hour).
+  document.querySelectorAll('.cov-cell.miss[data-h]').forEach(function (cell) {
+    var h = parseInt(cell.getAttribute('data-h'), 10);
     if (isNaN(h)) return;
     var hoursAgo = nowHour - h;
     if (hoursAgo >= 1 && hoursAgo <= 3) {
-      badge.classList.add('badge-overdue');
+      cell.classList.add('overdue');
     } else if (hoursAgo > 3) {
-      badge.classList.add('badge-missing-old');
+      cell.classList.add('missing-old');
     }
-    // hoursAgo === 0 → current hour, worker may still submit — no alert
+  });
+
+  /* ── 4. Rotate department chevrons in sync with collapse ── */
+  document.querySelectorAll('.cov-dept-head[data-bs-toggle="collapse"]').forEach(function (head) {
+    var target = document.querySelector(head.getAttribute('data-bs-target'));
+    if (!target) return;
+    target.addEventListener('hide.bs.collapse', function () { head.classList.add('collapsed'); });
+    target.addEventListener('show.bs.collapse', function () { head.classList.remove('collapsed'); });
   });
 
   /* ── 5. Table badge entrance — staggered pop-in ─────── */
