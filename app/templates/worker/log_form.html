@@ -240,6 +240,22 @@
     font-size: .875rem;
   }
 
+  /* ── Checklist mode (Fire dept) ──────────────────────── */
+  .chk-hint { font-size: .82rem; color: #475569; }
+  .chk-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: .6rem .25rem; border-bottom: 1px solid #eef1f7;
+  }
+  .chk-row:last-child { border-bottom: none; }
+  .chk-text { font-size: .9rem; color: #1a2744; display: flex; gap: .6rem; align-items: baseline; line-height: 1.35; }
+  .chk-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 22px; height: 22px; border-radius: 6px;
+    background: var(--ihc-navy); color: #fff; font-size: .7rem; font-weight: 700; flex-shrink: 0;
+  }
+  .chk-toggle { flex-shrink: 0; }
+  .chk-toggle .btn { font-weight: 600; }
+
   /* ── Reduced motion ──────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .lf-footer .btn-primary,
@@ -286,6 +302,11 @@
           </span>
           <span id="edit-countdown" class="fw-bold ms-3"></span>
         </div>
+        {% elif is_checklist %}
+        <div class="alert alert-info py-2 small">
+          <i class="bi bi-clipboard-check me-1"></i>
+          <strong>Shift checklist:</strong> One entry per shift. Every item defaults to <strong>OK</strong> — just change the exceptions and submit.
+        </div>
         {% else %}
         <div class="alert alert-info py-2 small">
           <i class="bi bi-clock me-1"></i>
@@ -300,11 +321,26 @@
             <input type="date" class="form-control" name="log_date" value="{{ today }}"
                    {% if edit_mode %}readonly{% else %}required{% endif %}>
           </div>
+          {% if is_checklist %}
+          <div class="col-6 col-md-4">
+            <label class="form-label fw-semibold">Shift <span class="text-danger">*</span></label>
+            {% if edit_mode %}
+            <input type="text" class="form-control" value="Shift {{ log.shift }}" disabled>
+            {% else %}
+            <select class="form-select" name="shift" required>
+              {% for s in shift_options %}
+              <option value="{{ s }}" {% if s == current_shift %}selected{% endif %}>Shift {{ s }}</option>
+              {% endfor %}
+            </select>
+            {% endif %}
+          </div>
+          {% else %}
           <div class="col-6 col-md-4">
             <label class="form-label fw-semibold">Time</label>
             <input type="time" class="form-control" name="log_time" value="{{ now_time }}"
                    {% if edit_mode %}readonly{% else %}required{% endif %}>
           </div>
+          {% endif %}
           {% if edit_mode %}
           <div class="col-md-4">
             <label class="form-label fw-semibold">Equipment</label>
@@ -339,7 +375,40 @@
 
       <!-- ═══ BODY ZONE: parameter readings grid ═══ -->
       <div class="lf-body">
-        {% if params %}
+        {% if is_checklist and params %}
+          {# ── Checklist layout (Fire dept): OK / Not OK / N/A per item ── #}
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div class="chk-hint"><i class="bi bi-info-circle me-1"></i>All items default to <strong>OK</strong>. Change only the exceptions.</div>
+            <button type="button" class="btn btn-sm btn-outline-success" id="mark-all-ok">
+              <i class="bi bi-check2-all me-1"></i>Mark all OK
+            </button>
+          </div>
+          {% set chk = namespace(section=None) %}
+          {% for p in params %}
+            {% if p.section != chk.section %}
+              {% set chk.section = p.section %}
+              <div class="section-header {% if not loop.first %}mt-3{% endif %}">
+                <i class="bi bi-clipboard-check me-1"></i>{{ p.section }}
+              </div>
+            {% endif %}
+            {% set cur = (readings_map.get(p.param_name) if readings_map else None) or 'OK' %}
+            <div class="chk-row">
+              <div class="chk-text"><span class="chk-num">{{ loop.index }}</span><span>{{ p.param_name }}</span></div>
+              <div class="btn-group btn-group-sm chk-toggle" role="group">
+                <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
+                       id="chk{{ loop.index }}_ok" value="OK" autocomplete="off" {% if cur == 'OK' %}checked{% endif %}>
+                <label class="btn btn-outline-success" for="chk{{ loop.index }}_ok">OK</label>
+                <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
+                       id="chk{{ loop.index }}_no" value="Not OK" autocomplete="off" {% if cur == 'Not OK' %}checked{% endif %}>
+                <label class="btn btn-outline-danger" for="chk{{ loop.index }}_no">Not OK</label>
+                <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
+                       id="chk{{ loop.index }}_na" value="N/A" autocomplete="off" {% if cur == 'N/A' %}checked{% endif %}>
+                <label class="btn btn-outline-secondary" for="chk{{ loop.index }}_na">N/A</label>
+              </div>
+            </div>
+          {% endfor %}
+
+        {% elif params %}
           {# Sections where params come in pump/fan groups of 3 phases (R, Y, B) #}
           {% set pump_sections = ['Secondary Pump', 'Primary Pump', 'Condenser Pump', 'C.T Fan'] %}
           {# Params that hold text (e.g. Healthy/Trip status) rather than numbers #}
@@ -439,6 +508,16 @@
 
       <!-- ═══ FOOTER ZONE: status, remarks, submit ═══ -->
       <div class="lf-footer">
+        {% if is_checklist %}
+        <input type="hidden" name="status" value="Completed">
+        <div class="row g-3 mb-4">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Observations (if any)</label>
+            <textarea class="form-control" name="worker_remark" rows="3"
+                      placeholder="Note any abnormal item, action taken, or leave blank if all OK.">{{ log.worker_remark or '' if edit_mode else '' }}</textarea>
+          </div>
+        </div>
+        {% else %}
         <div class="row g-3 mb-4">
           <div class="col-md-4">
             <label class="form-label fw-semibold">Equipment Status <span class="text-danger">*</span></label>
@@ -455,6 +534,7 @@
                       placeholder="e.g. Equipment running normally. Any alarms observed.">{{ log.worker_remark or '' if edit_mode else '' }}</textarea>
           </div>
         </div>
+        {% endif %}
 
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary px-4" id="submit-btn">
@@ -618,6 +698,15 @@ function tick() {
 }
 tick();
 setInterval(tick, 1000);
+</script>
+{% endif %}
+
+{% if is_checklist %}
+<script>
+// "Mark all OK" — set every checklist item back to OK in one tap.
+document.getElementById('mark-all-ok')?.addEventListener('click', function () {
+  document.querySelectorAll('input.btn-check[value="OK"]').forEach(function (r) { r.checked = true; });
+});
 </script>
 {% endif %}
 {% endblock %}

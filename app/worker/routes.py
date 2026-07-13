@@ -8,6 +8,25 @@ from app.utils import group_readings, ist_now, ist_today
 
 worker_bp = Blueprint("worker", __name__)
 
+# Checklist (Fire dept) logs are filled once per shift, not per hour. Each shift
+# maps to a fixed representative time so the existing one-per-hour uniqueness
+# naturally enforces one entry per shift without a schema change.
+SHIFT_TIMES = {"A": dtime(6, 0), "B": dtime(14, 0), "C": dtime(22, 0)}
+SHIFT_OPTIONS = ["A", "B", "C"]
+
+
+def current_shift(now):
+    h = now.hour
+    if 6 <= h < 14:
+        return "A"
+    if 14 <= h < 22:
+        return "B"
+    return "C"
+
+
+def is_checklist_equipment(params):
+    return any((p.input_type == "check") for p in params)
+
 
 def worker_required(f):
     @wraps(f)
@@ -140,6 +159,8 @@ def log_new():
             .all()
         )
 
+    checklist = is_checklist_equipment(params)
+
     return render_template(
         "worker/log_form.html",
         worker_dept=worker_dept,
@@ -148,6 +169,9 @@ def log_new():
         today=today,
         now_time=now_time,
         selected_equip=selected_equip,
+        is_checklist=checklist,
+        shift_options=SHIFT_OPTIONS,
+        current_shift=current_shift(now),
     )
 
 
@@ -157,20 +181,18 @@ def log_new():
 def log_submit():
     f = request.form
 
-    # Validate required fields
+    # Validate date
     try:
         log_date = date.fromisoformat(f.get("log_date"))
-        log_time = dtime.fromisoformat(f.get("log_time"))
     except (ValueError, TypeError):
-        flash("Invalid date or time.", "danger")
+        flash("Invalid date.", "danger")
         return redirect(url_for("worker.log_new"))
 
     equipment_id = f.get("equipment_id", type=int)
-    status = f.get("status")
     worker_remark = f.get("worker_remark", "").strip()
 
-    if not all([equipment_id, status]):
-        flash("Please fill in all required fields.", "danger")
+    if not equipment_id:
+        flash("Please select an equipment.", "danger")
         return redirect(url_for("worker.log_new"))
 
     equipment = Equipment.query.get_or_404(equipment_id)
@@ -179,7 +201,31 @@ def log_submit():
     if current_user.dept_id and equipment.dept_id != current_user.dept_id:
         abort(403)
 
-    # Prevent duplicate within the same clock-hour (workers submit once per hour)
+    checklist = is_checklist_equipment(equipment.params)
+
+    if checklist:
+        # Fire-style checklist: one entry per shift; time derived from shift.
+        shift = f.get("shift", "")
+        if shift not in SHIFT_TIMES:
+            flash("Please select a shift (A, B or C).", "danger")
+            return redirect(url_for("worker.log_new", equipment_id=equipment_id))
+        log_time = SHIFT_TIMES[shift]
+        status = "Completed"
+        dup_label = f"Shift {shift}"
+    else:
+        try:
+            log_time = dtime.fromisoformat(f.get("log_time"))
+        except (ValueError, TypeError):
+            flash("Invalid time.", "danger")
+            return redirect(url_for("worker.log_new"))
+        shift = ""
+        status = f.get("status")
+        if not status:
+            flash("Please fill in all required fields.", "danger")
+            return redirect(url_for("worker.log_new"))
+        dup_label = f"{log_time.hour:02d}:00"
+
+    # Prevent duplicate within the same slot (per hour, or per shift for checklists)
     same_day_logs = LogEntry.query.filter_by(
         worker_id=current_user.id,
         equipment_id=equipment_id,
@@ -189,8 +235,8 @@ def log_submit():
     for existing in same_day_logs:
         if existing.log_time.hour == submitted_hour:
             flash(
-                f"A log for {equipment.name} at {submitted_hour:02d}:00 on {log_date} "
-                "was already submitted. Submit again from the next hour.",
+                f"A log for {equipment.name} ({dup_label}) on {log_date} "
+                "was already submitted.",
                 "warning",
             )
             return redirect(url_for("worker.dashboard"))
@@ -212,7 +258,7 @@ def log_submit():
         worker_id=current_user.id,
         log_date=log_date,
         log_time=log_time,
-        shift="",
+        shift=shift,
         status=status,
         worker_remark=worker_remark or None,
     )
@@ -225,7 +271,7 @@ def log_submit():
         # FIX 2: DB unique constraint catches race-condition double submissions
         db.session.rollback()
         flash(
-            f"A log for {equipment.name} at {submitted_hour:02d}:00 on {log_date} "
+            f"A log for {equipment.name} ({dup_label}) on {log_date} "
             "was already submitted (duplicate blocked).",
             "warning",
         )
@@ -322,4 +368,6 @@ def log_edit(log_id):
         selected_equip=equipment.id,
         edit_deadline_display=edit_deadline_display,
         seconds_remaining=seconds_remaining,
+        is_checklist=is_checklist_equipment(params),
+        shift_options=SHIFT_OPTIONS,
     )

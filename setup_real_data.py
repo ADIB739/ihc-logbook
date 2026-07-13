@@ -256,6 +256,70 @@ def _apply_subsection_params(equip, param_rows):
         ))
 
 
+# ── Fire Dept — "Fighting" daily fire pumps inspection checklist ──────────────
+# Each item is answered OK / Not OK / N/A per shift. Format: (param_name, order)
+
+FIGHTING_CHECKLIST = [
+    "Fire water tank level (terrace & underground) is > 90%",
+    "All pumps selector switches are kept in AUTO mode",
+    "All valves are secured in open/close position (as required)",
+    "No leakage from pump gland, pipes etc.",
+    "All pressure gauges in pump room are within the displayed range",
+    "Fuel level in fire diesel engine pump tank is > 90%",
+    "Engine oil level of fire diesel engine is adequate",
+    "Coolant level is adequate in heat exchanger of DG fire pump",
+    "Battery charging condition is healthy",
+]
+
+
+def _apply_checklist_params(equip, section, items):
+    """Replace params for a checklist unit. `items` is a list of param names."""
+    EquipmentParam.query.filter_by(equipment_id=equip.id).delete()
+    db.session.flush()
+    for order, param_name in enumerate(items, start=1):
+        db.session.add(EquipmentParam(
+            equipment_id=equip.id,
+            param_name=param_name,
+            unit="",
+            section=section,
+            input_type="check",
+            display_order=order,
+        ))
+
+
+def sync_fire_department():
+    """Create the Fire department and its 'Fighting' checklist unit."""
+    print()
+    print("-- Fire Department -----------------------------------------")
+    fire = Department.query.filter_by(name="Fire").first()
+    if not fire:
+        fire = Department(name="Fire", is_active=True,
+                          description="Fire Safety — Fighting, Detection & Electrical")
+        db.session.add(fire)
+        db.session.commit()
+        print("  Created Fire department.")
+    else:
+        print(f"  Fire department already exists (id={fire.id}).")
+
+    # Fighting-1 — Daily Fire Pumps Inspection Checklist
+    fighting = Equipment.query.filter_by(name="Fighting-1").first()
+    if not fighting:
+        fighting = Equipment(dept_id=fire.id, name="Fighting-1", is_active=True,
+                             description="Daily Fire Pumps Inspection Checklist (Pacific Fire Controls)")
+        db.session.add(fighting)
+        db.session.flush()
+        print("  Created Fighting-1 equipment.")
+    else:
+        fighting.dept_id = fire.id
+        fighting.is_active = True
+        db.session.flush()
+        print(f"  Found existing Fighting-1 (id={fighting.id}).")
+
+    _apply_checklist_params(fighting, "Daily Fire Pumps Inspection", FIGHTING_CHECKLIST)
+    db.session.commit()
+    print(f"  [Fighting-1]  {len(FIGHTING_CHECKLIST)} checklist items (OK / Not OK / N/A per shift).")
+
+
 def fix_user_directory():
     """One-time (idempotent) staff name corrections + add supervisor Amar Nath.
 
@@ -318,6 +382,7 @@ def run():
         for col_def in [
             "ALTER TABLE equipment_params ADD COLUMN section VARCHAR(50)",
             "ALTER TABLE equipment_params ADD COLUMN subsection VARCHAR(100)",
+            "ALTER TABLE equipment_params ADD COLUMN input_type VARCHAR(20)",
         ]:
             try:
                 db.session.execute(text(col_def))
@@ -536,7 +601,10 @@ def run():
         print()
         print("Done. Genset-1 to Genset-4 ready under Electrical department.")
 
-        # 9. Staff directory corrections (names + new supervisor)
+        # 9. Fire department — Fighting checklist unit
+        sync_fire_department()
+
+        # 10. Staff directory corrections (names + new supervisor)
         fix_user_directory()
 
 

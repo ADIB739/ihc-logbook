@@ -51,6 +51,9 @@ class EquipmentParam(db.Model):
     unit = db.Column(db.String(20))
     section = db.Column(db.String(50))
     subsection = db.Column(db.String(100))
+    # Input control for the log form: None/"number" (default), "text", or
+    # "check" (a daily OK / Not OK / N/A checklist item, e.g. Fire dept).
+    input_type = db.Column(db.String(20))
     display_order = db.Column(db.Integer, nullable=False, default=0)
 
     def __repr__(self):
