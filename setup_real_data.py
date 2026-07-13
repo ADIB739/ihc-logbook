@@ -8,6 +8,9 @@ What this does:
     Chiller Plant logbook readings (creates Chiller-2 to 6 if they don't exist)
   - Creates "VFD & Pumps" equipment with 68 parameters (Voltage, VFD Freq,
     Secondary Pump, Primary Pump, Condenser Pump, C.T Fan)
+  - Creates Transformer-1 to Transformer-5 (18 params each) under Electrical
+  - Creates Genset-1 to Genset-4 (18 params each) under Electrical, migrating
+    the legacy single "Genset" to "Genset-1" so its logs are preserved
 
 Run: python setup_real_data.py
 """
@@ -152,6 +155,66 @@ VFD_PUMP_PARAMS = [
 ]
 
 
+# ── Transformer parameters (33 kV/433 V Basement Substation) ──────────────────
+# Format: (section, param_name, unit, display_order)
+
+TRANSFORMER_PARAMS = [
+    # HV VOLTAGES
+    ("HV Voltages",      "HV RY",                   "kV",   1),
+    ("HV Voltages",      "HV YB",                   "kV",   2),
+    ("HV Voltages",      "HV BR",                   "kV",   3),
+    # LV VOLTAGES
+    ("LV Voltages",      "LV RY",                   "V",    4),
+    ("LV Voltages",      "LV YB",                   "V",    5),
+    ("LV Voltages",      "LV BR",                   "V",    6),
+    # HV CURRENT
+    ("HV Current",       "HV Current R",            "A",    7),
+    ("HV Current",       "HV Current Y",            "A",    8),
+    ("HV Current",       "HV Current B",            "A",    9),
+    # LV CURRENT
+    ("LV Current",       "LV Current R",            "A",    10),
+    ("LV Current",       "LV Current Y",            "A",    11),
+    ("LV Current",       "LV Current B",            "A",    12),
+    # OPERATING CHECKS
+    ("Operating Checks", "Power Factor",            "",     13),
+    ("Operating Checks", "Frequency",               "Hz",   14),
+    ("Operating Checks", "Room Temp",               "°C",   15),
+    ("Operating Checks", "Winding Temp",            "°C",   16),
+    ("Operating Checks", "Trip CKT",                "",     17),
+    ("Operating Checks", "DC Voltage",              "V",    18),
+]
+
+
+# ── Genset parameters (Alternator & Control Panel) ────────────────────────────
+# Format: (section, subsection, param_name, unit, display_order)
+
+GENSET_PARAMS = [
+    # ENGINE — direct readings
+    ("Engine",                     None,                   "Hour Meter",    "Hrs",    1),
+    ("Engine",                     None,                   "LO Pressure",   "Kg/cm²", 2),
+    ("Engine",                     None,                   "LO Temperature","°C",     3),
+    ("Engine",                     None,                   "Water Temp",    "°C",     4),
+    ("Engine",                     None,                   "Room Temp",     "°C",     5),
+    # ENGINE — Heat Ex. Raw Water subsection
+    ("Engine",                     "Heat Ex. Raw Water",   "Temp In",       "°C",     6),
+    ("Engine",                     "Heat Ex. Raw Water",   "Temp Out",      "°C",     7),
+    ("Engine",                     "Heat Ex. Raw Water",   "PR",            "Psi",    8),
+    # ALTERNATOR & CONTROL PANEL — Voltage subsection
+    ("Alternator & Control Panel", "Voltage",              "Voltage RY",    "V",      9),
+    ("Alternator & Control Panel", "Voltage",              "Voltage YB",    "V",      10),
+    ("Alternator & Control Panel", "Voltage",              "Voltage BR",    "V",      11),
+    # ALTERNATOR & CONTROL PANEL — Current subsection
+    ("Alternator & Control Panel", "Current",              "Current R",     "A",      12),
+    ("Alternator & Control Panel", "Current",              "Current Y",     "A",      13),
+    ("Alternator & Control Panel", "Current",              "Current B",     "A",      14),
+    # ALTERNATOR & CONTROL PANEL — direct readings
+    ("Alternator & Control Panel", None,                   "Frequency",     "Hz",     15),
+    ("Alternator & Control Panel", None,                   "Power Factor",  "",       16),
+    ("Alternator & Control Panel", None,                   "KW",            "kW",     17),
+    ("Alternator & Control Panel", None,                   "KW Hours",      "kWh",    18),
+]
+
+
 def _apply_params(chiller):
     """Delete existing params for this equipment and insert the 34 IHC params."""
     old = EquipmentParam.query.filter_by(equipment_id=chiller.id).delete()
@@ -165,6 +228,35 @@ def _apply_params(chiller):
             display_order=order,
         ))
     return old
+
+
+def _apply_flat_params(equip, param_rows):
+    """Replace params for equipment defined as (section, name, unit, order)."""
+    EquipmentParam.query.filter_by(equipment_id=equip.id).delete()
+    db.session.flush()
+    for section, param_name, unit, order in param_rows:
+        db.session.add(EquipmentParam(
+            equipment_id=equip.id,
+            param_name=param_name,
+            unit=unit,
+            section=section,
+            display_order=order,
+        ))
+
+
+def _apply_subsection_params(equip, param_rows):
+    """Replace params for equipment defined as (section, subsection, name, unit, order)."""
+    EquipmentParam.query.filter_by(equipment_id=equip.id).delete()
+    db.session.flush()
+    for section, subsection, param_name, unit, order in param_rows:
+        db.session.add(EquipmentParam(
+            equipment_id=equip.id,
+            param_name=param_name,
+            unit=unit,
+            section=section,
+            subsection=subsection,
+            display_order=order,
+        ))
 
 
 def run():
@@ -264,68 +356,35 @@ def run():
         else:
             print(f"  Electrical department already exists (id={electrical.id}).")
 
-        # 6. Create / update Transformer-1 under Electrical
+        # 6. Create / update Transformer-1 through Transformer-5 under Electrical
         print()
-        print("-- Transformer (33kV/433V Basement Substation) -------------")
-        tr = Equipment.query.filter_by(name="Transformer-1").first()
-        if not tr:
-            tr = Equipment(dept_id=electrical.id, name="Transformer-1", is_active=True,
-                           description="33 kV/433 V Transformer at Basement Substation")
-            db.session.add(tr)
-            db.session.flush()
-            print("  Created Transformer-1 equipment.")
-        else:
-            tr.dept_id = electrical.id
-            tr.is_active = True
-            db.session.flush()
-            print(f"  Found existing Transformer-1 (id={tr.id}).")
+        print("-- Transformers (33kV/433V Basement Substation) ------------")
+        for n in range(1, 6):
+            name = f"Transformer-{n}"
+            tr = Equipment.query.filter_by(name=name).first()
+            if not tr:
+                tr = Equipment(dept_id=electrical.id, name=name, is_active=True,
+                               description="33 kV/433 V Transformer at Basement Substation")
+                db.session.add(tr)
+                db.session.flush()
+                print(f"  Created {name} equipment.")
+            else:
+                tr.dept_id = electrical.id
+                tr.is_active = True
+                db.session.flush()
+                print(f"  Found existing {name} (id={tr.id}).")
 
-        TRANSFORMER_PARAMS = [
-            # HV VOLTAGES
-            ("HV Voltages",      "HV RY",                   "kV",   1),
-            ("HV Voltages",      "HV YB",                   "kV",   2),
-            ("HV Voltages",      "HV BR",                   "kV",   3),
-            # LV VOLTAGES
-            ("LV Voltages",      "LV RY",                   "V",    4),
-            ("LV Voltages",      "LV YB",                   "V",    5),
-            ("LV Voltages",      "LV BR",                   "V",    6),
-            # HV CURRENT
-            ("HV Current",       "HV Current R",            "A",    7),
-            ("HV Current",       "HV Current Y",            "A",    8),
-            ("HV Current",       "HV Current B",            "A",    9),
-            # LV CURRENT
-            ("LV Current",       "LV Current R",            "A",    10),
-            ("LV Current",       "LV Current Y",            "A",    11),
-            ("LV Current",       "LV Current B",            "A",    12),
-            # OPERATING CHECKS
-            ("Operating Checks", "Power Factor",            "",     13),
-            ("Operating Checks", "Frequency",               "Hz",   14),
-            ("Operating Checks", "Room Temp",               "°C",   15),
-            ("Operating Checks", "Winding Temp",            "°C",   16),
-            ("Operating Checks", "Trip CKT",                "",     17),
-            ("Operating Checks", "DC Voltage",              "V",    18),
-        ]
-
-        EquipmentParam.query.filter_by(equipment_id=tr.id).delete()
-        db.session.flush()
-        for section, param_name, unit, order in TRANSFORMER_PARAMS:
-            db.session.add(EquipmentParam(
-                equipment_id=tr.id,
-                param_name=param_name,
-                unit=unit,
-                section=section,
-                display_order=order,
-            ))
-        db.session.commit()
+            _apply_flat_params(tr, TRANSFORMER_PARAMS)
+            db.session.commit()
 
         tr_sections = {}
         for s, p, u, o in TRANSFORMER_PARAMS:
             tr_sections.setdefault(s, []).append(p)
         for sec, params in tr_sections.items():
             print(f"  [{sec}]  {len(params)} params")
-        print(f"  Total: {len(TRANSFORMER_PARAMS)} parameters")
+        print(f"  Total: {len(TRANSFORMER_PARAMS)} parameters each")
         print()
-        print("Done. Transformer-1 ready (18 parameters).")
+        print("Done. Transformer-1 to Transformer-5 ready (18 parameters each).")
 
         # 7. Create / update HT Panel Board under Electrical
         print()
@@ -386,70 +445,43 @@ def run():
         print()
         print("Done. HT Panel Board ready under Electrical department.")
 
-        # 8. Create / update Genset under Electrical
+        # 8. Create / update Genset-1 through Genset-4 under Electrical
         print()
-        print("-- Genset (Alternator & Control Panel) ----------------------")
-        genset = Equipment.query.filter_by(name="Genset").first()
-        if not genset:
-            genset = Equipment(dept_id=electrical.id, name="Genset", is_active=True,
-                               description="Genset — Alternator & Control Panel Log")
-            db.session.add(genset)
+        print("-- Gensets (Alternator & Control Panel) ---------------------")
+        # Migrate the legacy single "Genset" to "Genset-1" so its logs are preserved
+        # and it joins the numbered unit series (like the Chillers).
+        legacy = Equipment.query.filter_by(name="Genset").first()
+        if legacy and not Equipment.query.filter_by(name="Genset-1").first():
+            legacy.name = "Genset-1"
             db.session.flush()
-            print("  Created Genset equipment.")
-        else:
-            genset.dept_id = electrical.id
-            genset.is_active = True
-            db.session.flush()
-            print(f"  Found existing Genset (id={genset.id}).")
+            print(f"  Renamed legacy 'Genset' -> 'Genset-1' (id={legacy.id}).")
 
-        # Format: (section, subsection, param_name, unit, display_order)
-        GENSET_PARAMS = [
-            # ENGINE — direct readings
-            ("Engine",                     None,                   "Hour Meter",    "Hrs",    1),
-            ("Engine",                     None,                   "LO Pressure",   "Kg/cm²", 2),
-            ("Engine",                     None,                   "LO Temperature","°C",     3),
-            ("Engine",                     None,                   "Water Temp",    "°C",     4),
-            ("Engine",                     None,                   "Room Temp",     "°C",     5),
-            # ENGINE — Heat Ex. Raw Water subsection
-            ("Engine",                     "Heat Ex. Raw Water",   "Temp In",       "°C",     6),
-            ("Engine",                     "Heat Ex. Raw Water",   "Temp Out",      "°C",     7),
-            ("Engine",                     "Heat Ex. Raw Water",   "PR",            "Psi",    8),
-            # ALTERNATOR & CONTROL PANEL — Voltage subsection
-            ("Alternator & Control Panel", "Voltage",              "Voltage RY",    "V",      9),
-            ("Alternator & Control Panel", "Voltage",              "Voltage YB",    "V",      10),
-            ("Alternator & Control Panel", "Voltage",              "Voltage BR",    "V",      11),
-            # ALTERNATOR & CONTROL PANEL — Current subsection
-            ("Alternator & Control Panel", "Current",              "Current R",     "A",      12),
-            ("Alternator & Control Panel", "Current",              "Current Y",     "A",      13),
-            ("Alternator & Control Panel", "Current",              "Current B",     "A",      14),
-            # ALTERNATOR & CONTROL PANEL — direct readings
-            ("Alternator & Control Panel", None,                   "Frequency",     "Hz",     15),
-            ("Alternator & Control Panel", None,                   "Power Factor",  "",       16),
-            ("Alternator & Control Panel", None,                   "KW",            "kW",     17),
-            ("Alternator & Control Panel", None,                   "KW Hours",      "kWh",    18),
-        ]
+        for n in range(1, 5):
+            name = f"Genset-{n}"
+            genset = Equipment.query.filter_by(name=name).first()
+            if not genset:
+                genset = Equipment(dept_id=electrical.id, name=name, is_active=True,
+                                   description="Genset — Alternator & Control Panel Log")
+                db.session.add(genset)
+                db.session.flush()
+                print(f"  Created {name} equipment.")
+            else:
+                genset.dept_id = electrical.id
+                genset.is_active = True
+                db.session.flush()
+                print(f"  Found existing {name} (id={genset.id}).")
 
-        EquipmentParam.query.filter_by(equipment_id=genset.id).delete()
-        db.session.flush()
-        for section, subsection, param_name, unit, order in GENSET_PARAMS:
-            db.session.add(EquipmentParam(
-                equipment_id=genset.id,
-                param_name=param_name,
-                unit=unit,
-                section=section,
-                subsection=subsection,
-                display_order=order,
-            ))
-        db.session.commit()
+            _apply_subsection_params(genset, GENSET_PARAMS)
+            db.session.commit()
 
         gs_sections = {}
         for s, ss, p, u, o in GENSET_PARAMS:
             gs_sections.setdefault(s, []).append(p)
         for sec, params in gs_sections.items():
             print(f"  [{sec}]  {len(params)} params")
-        print(f"  Total: {len(GENSET_PARAMS)} parameters")
+        print(f"  Total: {len(GENSET_PARAMS)} parameters each")
         print()
-        print("Done. Genset ready under Electrical department.")
+        print("Done. Genset-1 to Genset-4 ready under Electrical department.")
 
 
 if __name__ == "__main__":
