@@ -54,9 +54,26 @@ def dashboard():
         .limit(20)
         .all()
     )
+    return render_template(
+        "worker/dashboard.html",
+        recent_logs=recent_logs,
+        today_count=today_count,
+        coverage=coverage,
+        today=today,
+    )
 
-    # ── Log history: view this worker's submissions for any past date ──────────
+
+@worker_bp.route("/history")
+@login_required
+@worker_required
+def history():
+    """Browse this worker's own submitted logs for any past date."""
+    if current_user.role == "supervisor":
+        return redirect(url_for("supervisor.dashboard"))
+
     from datetime import timedelta
+    today = ist_today()
+
     history_date_str = request.args.get("history_date")
     try:
         history_date = date.fromisoformat(history_date_str) if history_date_str else today
@@ -73,19 +90,14 @@ def dashboard():
         .order_by(LogEntry.log_time)
         .all()
     )
-    history_prev = history_date - timedelta(days=1)
-    history_next = history_date + timedelta(days=1)
 
     return render_template(
-        "worker/dashboard.html",
-        recent_logs=recent_logs,
-        today_count=today_count,
-        coverage=coverage,
-        today=today,
+        "worker/history.html",
         history_logs=history_logs,
         history_date=history_date,
-        history_prev=history_prev,
-        history_next=history_next,
+        history_prev=history_date - timedelta(days=1),
+        history_next=history_date + timedelta(days=1),
+        today=today,
     )
 
 
