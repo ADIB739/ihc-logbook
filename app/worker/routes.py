@@ -28,6 +28,13 @@ def is_checklist_equipment(params):
     return any((p.input_type == "check") for p in params)
 
 
+def shift_filtered_params(params, shift):
+    """Checklist items visible for a given shift: untagged items (no subsection)
+    always show; shift-tagged items only show for their matching shift. This is
+    what makes the Shift Round logbook display only the current shift's zones."""
+    return [p for p in params if not p.subsection or p.subsection == shift]
+
+
 def worker_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -160,6 +167,10 @@ def log_new():
         )
 
     checklist = is_checklist_equipment(params)
+    cur_shift = current_shift(now)
+    if checklist:
+        # Show only the current shift's items (shift is set from the clock).
+        params = shift_filtered_params(params, cur_shift)
 
     return render_template(
         "worker/log_form.html",
@@ -170,8 +181,7 @@ def log_new():
         now_time=now_time,
         selected_equip=selected_equip,
         is_checklist=checklist,
-        shift_options=SHIFT_OPTIONS,
-        current_shift=current_shift(now),
+        current_shift=cur_shift,
     )
 
 
@@ -204,11 +214,10 @@ def log_submit():
     checklist = is_checklist_equipment(equipment.params)
 
     if checklist:
-        # Fire-style checklist: one entry per shift; time derived from shift.
-        shift = f.get("shift", "")
-        if shift not in SHIFT_TIMES:
-            flash("Please select a shift (A, B or C).", "danger")
-            return redirect(url_for("worker.log_new", equipment_id=equipment_id))
+        # Fire-style checklist: one entry per shift. The shift is determined by
+        # the server clock (IST) — the worker never selects it. Time is derived
+        # from the shift so the one-per-slot rule = one entry per shift.
+        shift = current_shift(ist_now())
         log_time = SHIFT_TIMES[shift]
         status = "Completed"
         dup_label = f"Shift {shift}"
@@ -241,9 +250,13 @@ def log_submit():
             )
             return redirect(url_for("worker.dashboard"))
 
-    # Collect parameter readings (with optional per-parameter remark)
+    # Collect parameter readings (with optional per-parameter remark).
+    # For a shift-partitioned checklist, only store the current shift's items.
+    params_for_readings = equipment.params
+    if checklist:
+        params_for_readings = shift_filtered_params(equipment.params, shift)
     readings = []
-    for param in equipment.params:
+    for param in params_for_readings:
         raw_val = f.get(f"param_{param.param_name}", "").strip()
         raw_rem = f.get(f"remark_{param.param_name}", "").strip()
         readings.append(
@@ -315,6 +328,9 @@ def log_edit(log_id):
         .order_by(EquipmentParam.display_order)
         .all()
     )
+    # For a shift-partitioned checklist, edit only the items of this log's shift.
+    if is_checklist_equipment(params):
+        params = shift_filtered_params(params, log.shift)
 
     if request.method == "POST":
         if not log.is_editable:
@@ -375,5 +391,4 @@ def log_edit(log_id):
         edit_deadline_display=edit_deadline_display,
         seconds_remaining=seconds_remaining,
         is_checklist=is_checklist_equipment(params),
-        shift_options=SHIFT_OPTIONS,
     )

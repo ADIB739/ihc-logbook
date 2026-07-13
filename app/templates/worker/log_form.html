@@ -327,7 +327,7 @@
         {% elif is_checklist %}
         <div class="alert alert-info py-2 small">
           <i class="bi bi-clipboard-check me-1"></i>
-          <strong>Shift checklist:</strong> One entry per shift. Every item defaults to <strong>OK</strong> — just change the exceptions and submit.
+          <strong>Shift checklist:</strong> The shift is set automatically from the current time — you're filling <strong>Shift {{ current_shift }}</strong>. One entry per shift; every item defaults to <strong>OK</strong>, just change the exceptions.
         </div>
         {% else %}
         <div class="alert alert-info py-2 small">
@@ -345,16 +345,8 @@
           </div>
           {% if is_checklist %}
           <div class="col-6 col-md-4">
-            <label class="form-label fw-semibold">Shift <span class="text-danger">*</span></label>
-            {% if edit_mode %}
-            <input type="text" class="form-control" value="Shift {{ log.shift }}" disabled>
-            {% else %}
-            <select class="form-select" name="shift" required>
-              {% for s in shift_options %}
-              <option value="{{ s }}" {% if s == current_shift %}selected{% endif %}>Shift {{ s }}</option>
-              {% endfor %}
-            </select>
-            {% endif %}
+            <label class="form-label fw-semibold">Shift <i class="bi bi-clock-history ms-1" title="Set automatically from the current time"></i></label>
+            <input type="text" class="form-control" value="Shift {{ log.shift if edit_mode else current_shift }}" disabled>
           </div>
           {% else %}
           <div class="col-6 col-md-4">

@@ -273,16 +273,20 @@ FIGHTING_CHECKLIST = [
 
 
 # ── Fire Dept — "Shift Round" checklist (2nd logbook) ─────────────────────────
-# A grid: each SYSTEM (section) is checked across every ZONE (item), OK per cell,
-# once per shift. Param names are "System - Zone" so they stay unique; the form
-# shows just the zone under each system heading.
+# A grid: each SYSTEM (section) is checked across the ZONES assigned to the shift.
+# Zones are split across shifts (per the paper sheet), so each param is tagged
+# with its shift in `subsection`; the form shows only the current shift's zones.
+# Param names are "System - Zone" so they stay unique; the form shows just the
+# zone under each system heading.
 
 SHIFT_ROUND_SYSTEMS = [
     "Staircase", "FHC", "Extinguisher", "Detectors/MCP", "Signage", "Fire Alarm Panel",
 ]
-SHIFT_ROUND_ZONES = [
-    "Room Block", "Lite Zone", "C.C.", "Audi.", "6C", "5A", "5B", "7A", "6A", "4B", "4A",
-]
+SHIFT_ROUND_ZONES_BY_SHIFT = {
+    "A": ["Room Block", "Lite Zone", "C.C.", "Audi."],
+    "B": ["6C", "5A", "5B", "7A"],
+    "C": ["6A", "4B", "4A"],
+}
 
 
 def _apply_checklist_params(equip, section, items):
@@ -300,22 +304,25 @@ def _apply_checklist_params(equip, section, items):
         ))
 
 
-def _apply_grid_checklist(equip, systems, zones):
-    """Replace params for a System x Zone checklist grid. Returns the item count."""
+def _apply_grid_checklist(equip, systems, zones_by_shift):
+    """Replace params for a System x Zone grid where zones are split by shift.
+    Each param's `subsection` holds its shift (A/B/C). Returns the item count."""
     EquipmentParam.query.filter_by(equipment_id=equip.id).delete()
     db.session.flush()
     order = 0
     for system in systems:
-        for zone in zones:
-            order += 1
-            db.session.add(EquipmentParam(
-                equipment_id=equip.id,
-                param_name=f"{system} - {zone}",
-                unit="",
-                section=system,
-                input_type="check",
-                display_order=order,
-            ))
+        for shift, zones in zones_by_shift.items():
+            for zone in zones:
+                order += 1
+                db.session.add(EquipmentParam(
+                    equipment_id=equip.id,
+                    param_name=f"{system} - {zone}",
+                    unit="",
+                    section=system,
+                    subsection=shift,
+                    input_type="check",
+                    display_order=order,
+                ))
     return order
 
 
@@ -365,10 +372,11 @@ def sync_fire_department():
         db.session.flush()
         print(f"  Found existing Shift Round-1 (id={shift_round.id}).")
 
-    n = _apply_grid_checklist(shift_round, SHIFT_ROUND_SYSTEMS, SHIFT_ROUND_ZONES)
+    n = _apply_grid_checklist(shift_round, SHIFT_ROUND_SYSTEMS, SHIFT_ROUND_ZONES_BY_SHIFT)
     db.session.commit()
+    per_shift = ", ".join(f"{s}:{len(z)}" for s, z in SHIFT_ROUND_ZONES_BY_SHIFT.items())
     print(f"  [Shift Round-1]  {n} checklist items "
-          f"({len(SHIFT_ROUND_SYSTEMS)} systems x {len(SHIFT_ROUND_ZONES)} zones).")
+          f"({len(SHIFT_ROUND_SYSTEMS)} systems; zones/shift {per_shift}).")
 
 
 def fix_user_directory():
