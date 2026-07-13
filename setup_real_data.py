@@ -14,8 +14,8 @@ What this does:
 
 Run: python setup_real_data.py
 """
-from app.extensions import db
-from app.models import Department, Equipment, EquipmentParam
+from app.extensions import db, bcrypt
+from app.models import Department, Equipment, EquipmentParam, User
 from sqlalchemy import text
 
 # ── Real Chiller-1 parameters from IHC Water Cooled Chiller Plant Log ─────────
@@ -256,6 +256,60 @@ def _apply_subsection_params(equip, param_rows):
         ))
 
 
+def fix_user_directory():
+    """One-time (idempotent) staff name corrections + add supervisor Amar Nath.
+
+    Renaming a User updates every historical log display automatically, because
+    log entries reference the worker by id (worker_id) — the name is not copied
+    into each log. Every step is guarded so re-running is a no-op once applied,
+    and so a later name change made through the UI is not reverted.
+    """
+    print()
+    print("-- Staff directory corrections -----------------------------")
+    changed = []
+
+    # 1. Rename workers by their current name (matches nothing once applied)
+    for old, new in (("Ramesh Kumar", "Rohit Kumar"),
+                     ("Suresh Singh", "Nanak Chand")):
+        for u in User.query.filter_by(name=old).all():
+            u.name = new
+            changed.append(f"{old} -> {new}")
+
+    # 2. Name the existing (sole) supervisor "Brij Mohan Chaubey" — only if that
+    #    name isn't already present, so it acts exactly once.
+    if not User.query.filter_by(name="Brij Mohan Chaubey").first():
+        sup = (
+            User.query.filter_by(role="supervisor")
+            .filter(User.name != "Amar Nath")
+            .order_by(User.id)
+            .first()
+        )
+        if sup:
+            changed.append(f"{sup.name} -> Brij Mohan Chaubey (supervisor)")
+            sup.name = "Brij Mohan Chaubey"
+
+    # 3. Add supervisor Amar Nath — only if missing.
+    if not (User.query.filter_by(email="amarnath@ihc.in").first()
+            or User.query.filter_by(name="Amar Nath").first()):
+        db.session.add(User(
+            name="Amar Nath",
+            email="amarnath@ihc.in",
+            password=bcrypt.generate_password_hash("supervisor@123").decode("utf-8"),
+            role="supervisor",
+            dept_id=None,
+            must_change_password=True,
+            is_active=True,
+        ))
+        changed.append("created supervisor Amar Nath (amarnath@ihc.in)")
+
+    if changed:
+        db.session.commit()
+        for c in changed:
+            print(f"  {c}")
+    else:
+        print("  No changes needed — directory already up to date.")
+
+
 def run():
     from app import create_app
     app = create_app()
@@ -481,6 +535,9 @@ def run():
         print(f"  Total: {len(GENSET_PARAMS)} parameters each")
         print()
         print("Done. Genset-1 to Genset-4 ready under Electrical department.")
+
+        # 9. Staff directory corrections (names + new supervisor)
+        fix_user_directory()
 
 
 if __name__ == "__main__":
