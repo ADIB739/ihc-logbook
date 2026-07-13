@@ -242,11 +242,15 @@
 
   /* ── Checklist mode (Fire dept) ──────────────────────── */
   .chk-hint { font-size: .82rem; color: #475569; }
-  .chk-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-    padding: .6rem .25rem; border-bottom: 1px solid #eef1f7;
+  .chk-item { padding: .55rem .25rem .65rem; border-bottom: 1px solid #eef1f7; }
+  .chk-item:last-child { border-bottom: none; }
+  .chk-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .chk-remark {
+    margin-top: .5rem; background: #f7f9fc; border-color: #e1e7f2;
+    font-size: .8rem; color: #1a2744;
   }
-  .chk-row:last-child { border-bottom: none; }
+  .chk-remark::placeholder { color: #aab4c8; }
+  .chk-remark:focus { background: #fff; border-color: var(--ihc-navy); box-shadow: 0 0 0 2px rgba(12,31,69,.08); }
   .chk-text { font-size: .9rem; color: #1a2744; display: flex; gap: .6rem; align-items: baseline; line-height: 1.35; }
   .chk-num {
     display: inline-flex; align-items: center; justify-content: center;
@@ -392,19 +396,24 @@
               </div>
             {% endif %}
             {% set cur = (readings_map.get(p.param_name) if readings_map else None) or 'OK' %}
-            <div class="chk-row">
-              <div class="chk-text"><span class="chk-num">{{ loop.index }}</span><span>{{ p.param_name }}</span></div>
-              <div class="btn-group btn-group-sm chk-toggle" role="group">
-                <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
-                       id="chk{{ loop.index }}_ok" value="OK" autocomplete="off" {% if cur == 'OK' %}checked{% endif %}>
-                <label class="btn btn-outline-success" for="chk{{ loop.index }}_ok">OK</label>
-                <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
-                       id="chk{{ loop.index }}_no" value="Not OK" autocomplete="off" {% if cur == 'Not OK' %}checked{% endif %}>
-                <label class="btn btn-outline-danger" for="chk{{ loop.index }}_no">Not OK</label>
-                <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
-                       id="chk{{ loop.index }}_na" value="N/A" autocomplete="off" {% if cur == 'N/A' %}checked{% endif %}>
-                <label class="btn btn-outline-secondary" for="chk{{ loop.index }}_na">N/A</label>
+            <div class="chk-item">
+              <div class="chk-row">
+                <div class="chk-text"><span class="chk-num">{{ loop.index }}</span><span>{{ p.param_name }}</span></div>
+                <div class="btn-group btn-group-sm chk-toggle" role="group">
+                  <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
+                         id="chk{{ loop.index }}_ok" value="OK" autocomplete="off" {% if cur == 'OK' %}checked{% endif %}>
+                  <label class="btn btn-outline-success" for="chk{{ loop.index }}_ok">OK</label>
+                  <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
+                         id="chk{{ loop.index }}_no" value="Not OK" autocomplete="off" {% if cur == 'Not OK' %}checked{% endif %}>
+                  <label class="btn btn-outline-danger" for="chk{{ loop.index }}_no">Not OK</label>
+                  <input type="radio" class="btn-check" name="param_{{ p.param_name }}"
+                         id="chk{{ loop.index }}_na" value="N/A" autocomplete="off" {% if cur == 'N/A' %}checked{% endif %}>
+                  <label class="btn btn-outline-secondary" for="chk{{ loop.index }}_na">N/A</label>
+                </div>
               </div>
+              <input type="text" class="form-control form-control-sm chk-remark"
+                     name="remark_{{ p.param_name }}" placeholder="Add a remark (optional)"
+                     value="{{ readings_remarks.get(p.param_name, '') if readings_remarks else '' }}">
             </div>
           {% endfor %}
 

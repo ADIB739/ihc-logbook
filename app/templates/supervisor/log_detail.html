@@ -92,7 +92,7 @@
           </div>
           <table class="table table-sm mb-0">
             <thead class="table-light">
-              <tr><th>Parameter</th><th>Value</th><th>Unit</th></tr>
+              <tr><th>Parameter</th><th>Value</th><th>Unit</th><th>Remark</th></tr>
             </thead>
             <tbody>
               {% for r in rows %}
@@ -100,6 +100,7 @@
                 <td class="small">{{ r.param_name }}</td>
                 <td class="fw-semibold small">{{ r.param_value or '—' }}</td>
                 <td class="text-muted small">{{ r.unit or '' }}</td>
+                <td class="small text-muted fst-italic">{{ r.remark or '' }}</td>
               </tr>
               {% endfor %}
             </tbody>

@@ -383,16 +383,17 @@ def run():
             "ALTER TABLE equipment_params ADD COLUMN section VARCHAR(50)",
             "ALTER TABLE equipment_params ADD COLUMN subsection VARCHAR(100)",
             "ALTER TABLE equipment_params ADD COLUMN input_type VARCHAR(20)",
+            "ALTER TABLE log_readings ADD COLUMN remark VARCHAR(255)",
         ]:
+            tbl = col_def.split("ALTER TABLE ")[1].split()[0]
+            col = col_def.split("ADD COLUMN ")[1].split()[0]
             try:
                 db.session.execute(text(col_def))
                 db.session.commit()
-                col = col_def.split("ADD COLUMN ")[1].split()[0]
-                print(f"  Added `{col}` column to equipment_params.")
+                print(f"  Added `{col}` column to {tbl}.")
             except Exception:
                 db.session.rollback()
-                col = col_def.split("ADD COLUMN ")[1].split()[0]
-                print(f"  `{col}` column already exists — skipping.")
+                print(f"  `{col}` column already exists on {tbl} — skipping.")
 
         # 2. Find HVAC department
         hvac = Department.query.filter_by(name="HVAC").first()

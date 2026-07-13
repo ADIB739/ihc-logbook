@@ -153,6 +153,8 @@ class LogReading(db.Model):
     param_name = db.Column(db.String(100), nullable=False)
     param_value = db.Column(db.String(50))
     unit = db.Column(db.String(20))
+    # Optional per-parameter note the worker can add next to a reading/checklist item
+    remark = db.Column(db.String(255))
 
     def __repr__(self):
         return f"<Reading {self.param_name}={self.param_value}>"

@@ -241,15 +241,17 @@ def log_submit():
             )
             return redirect(url_for("worker.dashboard"))
 
-    # Collect parameter readings
+    # Collect parameter readings (with optional per-parameter remark)
     readings = []
     for param in equipment.params:
         raw_val = f.get(f"param_{param.param_name}", "").strip()
+        raw_rem = f.get(f"remark_{param.param_name}", "").strip()
         readings.append(
             LogReading(
                 param_name=param.param_name,
                 param_value=raw_val if raw_val else None,
                 unit=param.unit,
+                remark=raw_rem if raw_rem else None,
             )
         )
 
@@ -329,11 +331,13 @@ def log_edit(log_id):
 
         for param in params:
             raw_val = request.form.get(f"param_{param.param_name}", "").strip()
+            raw_rem = request.form.get(f"remark_{param.param_name}", "").strip()
             db.session.add(LogReading(
                 log_id=log.id,
                 param_name=param.param_name,
                 param_value=raw_val if raw_val else None,
                 unit=param.unit,
+                remark=raw_rem if raw_rem else None,
             ))
 
         log.is_edited = True
@@ -344,6 +348,7 @@ def log_edit(log_id):
         return redirect(url_for("worker.log_view", log_id=log_id))
 
     readings_map = {r.param_name: r.param_value for r in log.readings}
+    readings_remarks = {r.param_name: r.remark for r in log.readings}
     ref = log.edited_at or log.submitted_at
     edit_deadline_utc = ref + timedelta(minutes=5)
 
@@ -363,6 +368,7 @@ def log_edit(log_id):
         equipment_list=[equipment],
         params=params,
         readings_map=readings_map,
+        readings_remarks=readings_remarks,
         today=log.log_date.isoformat(),
         now_time=log.log_time.strftime("%H:%M"),
         selected_equip=equipment.id,

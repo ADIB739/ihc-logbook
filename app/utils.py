@@ -47,6 +47,7 @@ def group_readings(log):
                 "param_name": pname,
                 "param_value": r.param_value if r else None,
                 "unit": r.unit if r else "",
+                "remark": r.remark if r else "",
             })
         grouped.append((sec, rows))
 
@@ -55,7 +56,8 @@ def group_readings(log):
     extras = [r for r in log.readings if r.param_name not in known]
     if extras:
         grouped.append(("Other", [
-            {"param_name": r.param_name, "param_value": r.param_value, "unit": r.unit or ""}
+            {"param_name": r.param_name, "param_value": r.param_value,
+             "unit": r.unit or "", "remark": r.remark or ""}
             for r in extras
         ]))
 
